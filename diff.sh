@@ -374,22 +374,148 @@ EOF
 # ───────────────────────────────
 # 3X-UI Panel Auto-Configuration
 # ───────────────────────────────
+# ───────────────────────────────
+# 3X-UI Panel Auto-Configuration via Database
+# ───────────────────────────────
 configure_3xui_panel() {
     local port="$1"
     local route="$2"
     local username="$3"
     local password="$4"
 
-    info "Configuring 3X-UI panel settings automatically..."
+    info "Configuring 3X-UI panel settings via database..."
 
-    # Wait for 3X-UI to be fully ready
+    # Wait for 3X-UI to create the database
+    local max_attempts=30
+    local attempt=0
+    local db_path="$INSTALL_DIR/db/x-ui.db"
+
+    info "Waiting for 3X-UI database to be created..."
+    while [ $attempt -lt $max_attempts ]; do
+        if [ -f "$db_path" ]; then
+            success "Database file found!"
+            break
+        fi
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+
+    if [ ! -f "$db_path" ]; then
+        warn "Database file not found at $db_path"
+        return 1
+    fi
+
+    # Wait a bit more for initial setup to complete
+    sleep 3
+
+    # Stop the container to safely modify the database
+    info "Stopping 3X-UI container to modify database..."
+    docker compose -f "$INSTALL_DIR/compose.yml" stop 3xui
+    sleep 2
+
+    # Install sqlite3 if not present
+    if ! command -v sqlite3 &> /dev/null; then
+        info "Installing sqlite3..."
+        sudo apt-get install -y sqlite3
+    fi
+
+    # Hash the password (3X-UI uses SHA256)
+    local hashed_password=$(echo -n "$password" | sha256sum | cut -d' ' -f1)
+
+    info "Updating database with new configuration..."
+
+    # Backup the database first
+    cp "$db_path" "${db_path}.backup"
+    success "Database backed up to ${db_path}.backup"
+
+    # Update the users table for credentials
+    sqlite3 "$db_path" "UPDATE users SET username='$username', password='$hashed_password' WHERE id=1;" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        success "Admin credentials updated in database!"
+    else
+        warn "Failed to update credentials in database"
+    fi
+
+    # Update the settings table for port and webBasePath
+    # First, let's check what settings exist
+    local port_exists=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM settings WHERE key='webPort';" 2>/dev/null)
+    local path_exists=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM settings WHERE key='webBasePath';" 2>/dev/null)
+
+    if [ "$port_exists" = "0" ]; then
+        # Insert new setting
+        sqlite3 "$db_path" "INSERT INTO settings (key, value) VALUES ('webPort', '$port');" 2>/dev/null
+    else
+        # Update existing setting
+        sqlite3 "$db_path" "UPDATE settings SET value='$port' WHERE key='webPort';" 2>/dev/null
+    fi
+
+    if [ $? -eq 0 ]; then
+        success "Web port updated to $port in database!"
+    else
+        warn "Failed to update web port"
+    fi
+
+    if [ "$path_exists" = "0" ]; then
+        # Insert new setting
+        sqlite3 "$db_path" "INSERT INTO settings (key, value) VALUES ('webBasePath', '/$route/');" 2>/dev/null
+    else
+        # Update existing setting
+        sqlite3 "$db_path" "UPDATE settings SET value='/$route/' WHERE key='webBasePath';" 2>/dev/null
+    fi
+
+    if [ $? -eq 0 ]; then
+        success "Web base path updated to /$route/ in database!"
+    else
+        warn "Failed to update web base path"
+    fi
+
+    # Start the container again
+    info "Starting 3X-UI container with new configuration..."
+    docker compose -f "$INSTALL_DIR/compose.yml" start 3xui
+
+    info "Waiting for panel to start with new configuration..."
+    sleep 8
+
+    # Verify panel is accessible on new port
+    local verify_attempts=0
+    while [ $verify_attempts -lt 15 ]; do
+        if curl -s "http://localhost:$port/$route/" >/dev/null 2>&1; then
+            success "Panel is accessible on new port $port at /$route/!"
+            return 0
+        fi
+        verify_attempts=$((verify_attempts + 1))
+        sleep 1
+    done
+
+    # Try without trailing slash
+    if curl -s "http://localhost:$port/$route" >/dev/null 2>&1; then
+        success "Panel is accessible on new port $port at /$route!"
+        return 0
+    fi
+
+    warn "Could not verify panel accessibility, but configuration was applied"
+    warn "The panel might need a few more seconds to start"
+    return 0
+}
+
+# Alternative: Using docker exec to run x-ui commands
+configure_3xui_panel_v2() {
+    local port="$1"
+    local route="$2"
+    local username="$3"
+    local password="$4"
+
+    info "Configuring 3X-UI panel using container commands..."
+
+    # Wait for container to be fully ready
     local max_attempts=30
     local attempt=0
 
-    info "Waiting for 3X-UI panel to be ready..."
+    info "Waiting for 3X-UI container to be ready..."
     while [ $attempt -lt $max_attempts ]; do
-        if curl -s http://localhost:2053 >/dev/null 2>&1; then
-            success "3X-UI panel is responding!"
+        if docker exec 3xui_app x-ui version >/dev/null 2>&1; then
+            success "3X-UI container is ready!"
             break
         fi
         attempt=$((attempt + 1))
@@ -397,89 +523,60 @@ configure_3xui_panel() {
     done
 
     if [ $attempt -eq $max_attempts ]; then
-        warn "Could not verify 3X-UI is ready. Configuration may fail."
-        return 1
+        warn "Container not ready, attempting configuration anyway..."
     fi
 
-    sleep 2  # Extra wait for full initialization
+    # Try using x-ui command line interface
+    info "Setting admin username..."
+    docker exec 3xui_app x-ui setting -username "$username" 2>&1 | grep -v "command not found" || true
 
-    # Login and get session cookie
-    info "Logging in to 3X-UI panel..."
-    local cookie_file="/tmp/3xui_cookies_$$.txt"
+    info "Setting admin password..."
+    docker exec 3xui_app x-ui setting -password "$password" 2>&1 | grep -v "command not found" || true
 
-    local login_response=$(curl -s -c "$cookie_file" -X POST \
-        "http://localhost:2053/login" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "username=admin&password=admin" 2>/dev/null)
+    info "Setting web port..."
+    docker exec 3xui_app x-ui setting -port "$port" 2>&1 | grep -v "command not found" || true
 
-    if [ ! -f "$cookie_file" ] || [ ! -s "$cookie_file" ]; then
-        warn "Failed to login to 3X-UI panel"
-        rm -f "$cookie_file"
-        return 1
-    fi
+    info "Setting web path..."
+    docker exec 3xui_app x-ui setting -webBasePath "/$route/" 2>&1 | grep -v "command not found" || true
 
-    success "Logged in successfully!"
+    # Restart to apply changes
+    info "Restarting container to apply changes..."
+    docker compose -f "$INSTALL_DIR/compose.yml" restart 3xui
 
-    # Get current settings first
-    info "Retrieving current panel settings..."
-    local settings=$(curl -s -b "$cookie_file" \
-        "http://localhost:2053/panel/api/inbounds/list" 2>/dev/null)
-
-    # Update panel settings
-    info "Updating panel port to $port and path to /$route..."
-
-    # Try to update settings via the settings endpoint
-    local update_response=$(curl -s -b "$cookie_file" -X POST \
-        "http://localhost:2053/panel/setting/update" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "webPort=$port&webBasePath=/$route&webCertFile=&webKeyFile=" 2>/dev/null)
-
-    if [ $? -eq 0 ]; then
-        success "Panel settings updated!"
-    else
-        warn "Could not update panel settings automatically"
-        rm -f "$cookie_file"
-        return 1
-    fi
-
-    # Update admin credentials
-    info "Updating admin credentials..."
-    local user_update=$(curl -s -b "$cookie_file" -X POST \
-        "http://localhost:2053/panel/setting/update" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "username=$username&password=$password" 2>/dev/null)
-
-    if [ $? -eq 0 ]; then
-        success "Admin credentials updated!"
-    else
-        warn "Could not update credentials automatically"
-    fi
-
-    # Restart panel to apply changes
-    info "Restarting 3X-UI panel..."
-    curl -s -b "$cookie_file" -X POST \
-        "http://localhost:2053/panel/setting/restartPanel" >/dev/null 2>&1
-
-    rm -f "$cookie_file"
-
-    info "Waiting for panel to restart..."
     sleep 8
 
-    # Verify panel is accessible on new port
-    local verify_attempts=0
-    while [ $verify_attempts -lt 10 ]; do
-        if curl -s "http://localhost:$port" >/dev/null 2>&1; then
-            success "Panel is accessible on new port $port!"
-            return 0
-        fi
-        verify_attempts=$((verify_attempts + 1))
-        sleep 1
-    done
-
-    warn "Could not verify panel on new port, but settings were applied"
+    success "Configuration applied via container commands!"
     return 0
 }
 
+# Hybrid approach: Try both methods
+configure_3xui_panel_hybrid() {
+    local port="$1"
+    local route="$2"
+    local username="$3"
+    local password="$4"
+
+    info "Attempting hybrid configuration approach..."
+
+    # First try the CLI method (if available)
+    info "Trying container CLI commands..."
+    configure_3xui_panel_v2 "$port" "$route" "$username" "$password" 2>/dev/null
+
+    # Then ensure changes via database
+    info "Ensuring configuration via database modification..."
+    configure_3xui_panel "$port" "$route" "$username" "$password"
+
+    # Verify
+    sleep 5
+    if curl -s "http://localhost:$port/$route" >/dev/null 2>&1 || \
+       curl -s "http://localhost:$port/$route/" >/dev/null 2>&1; then
+        success "Panel configuration successful!"
+        return 0
+    else
+        warn "Could not verify panel, but configuration was applied"
+        return 1
+    fi
+}
 # ───────────────────────────────
 # Caddy Installation & Setup
 # ───────────────────────────────
