@@ -621,9 +621,21 @@ caddy_install() {
         echo ""
         read -p "Press Enter to continue..."
     else
-        read -sp "Enter admin password [default: admin]: " PASSWORD
-        echo ""
-        PASSWORD=${PASSWORD:-admin}
+        while true
+        do
+            read -sp "Enter admin password [default: admin]: " PASSWORD
+            echo ""
+            PASSWORD=${PASSWORD:-admin}
+            read -sp "Enter admin password again: " PASSWORD_CHECK
+            echo ""
+            if [ "$PASSWORD" != "$PASSWORD_CHECK" ]; then
+                echo -e "${RED}Password don't match!${NC}"
+                echo -e "${RED}Password not set, try again...${NC}"
+            else
+                break
+            fi
+        done
+
         if [ "$PASSWORD" == "admin" ]; then
             warn "Using default password 'admin' - consider changing this later!"
         fi
