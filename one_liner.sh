@@ -412,9 +412,21 @@ caddy_install() {
         echo ""
         read -p "Press Enter to continue..."
     else
-        read -sp "Enter admin password [default: admin]: " PASSWORD
-        echo ""
-        PASSWORD=${PASSWORD:-admin}
+        while true
+        do
+            read -sp "Enter admin password [default: admin]: " PASSWORD
+            echo ""
+            PASSWORD=${PASSWORD:-admin}
+            read -sp "Enter admin password again: " local check_password
+            echo ""
+            check_password=${check_password:-admin}
+            if [ "$PASSWORD" != "$check_password" ]; then
+                echo -e "${RED}Passwords did NOT match${NC}"
+                echo -e "${RED}Password not set, try again...${NC}"
+            else
+                break
+            fi
+        done
         if [ "$PASSWORD" == "admin" ]; then
             warn "Using default password 'admin' - consider changing this later!"
         fi
@@ -471,13 +483,14 @@ caddy_install() {
     if systemctl is-active --quiet caddy; then
         success "Caddy is running!"
         echo -e "${RED}${BOLD}!ATTENTION!${NC}"
-        echo -e "${GREEN}Open URL:${NC} http://$dom_name:2053"
-        echo -e "${GREEN}Open \"${YELLOW}Panel Settings${GREEN}\"${NC}"
-        echo -e "${GREEN}Change \"${YELLOW}Listen Port${GREEN}\" to ${BLUE}$PORT${NC}"
-        echo -e "${GREEN}Change \"${YELLOW}URI Path${GREEN}\" to ${BLUE}$ROUTE${NC}"
-        echo -e "${GREEN}Click ${BLUE}Save${NC}"
-        echo -e "${GREEN}Click ${BLUE}Restart Panel${NC}"
-        read -p "Press Enter if your webPanel closed after you've restarted"
+        echo -e "${GREEN}Open URL: ${YELLOW}http://$dom_name:2053"
+        echo -e "${GREEN}Open      \"${YELLOW}${BOLD}Panel Settings${GREEN}\"${NC}"
+        echo -e "${GREEN}Change    \"${YELLOW}${BOLD}Listen Port${GREEN}\" to ${BLUE}$BE_PORT${NC}"
+        echo -e "${GREEN}Change    \"${YELLOW}${BOLD}URI Path${NC}${GREEN}\" to ${BLUE}${BOLD}/$ROUTE$/{NC}"
+        echo -e "${GREEN}Click     ${BLUE}${BOLD}Save${NC}"
+        echo -e "${GREEN}Click     ${BLUE}${BOLD}Restart Panel${NC}"
+        echo -e "Press ${YELLOW}Enter${NC} if your webPanel closed after you've restarted"
+        read
         echo ""
         banner "═══════════════════════════════════════════════════════════"
         banner "               3X-UI Panel Access Information"
