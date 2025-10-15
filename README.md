@@ -142,8 +142,15 @@ bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/on
 # -> Select "y" and provide your domain name
 # -> Choose to install Caddy for HTTPS
 ```
+#### Before you open webPanel:
+- Open URL: `http://yourdomain.com:2053`
+- Go to `Panel Settings`
+- Change `Listen Port` to the backend port you chose previously
+- Change `URI Path` to the path route you set previously
+- Click `Save`
+- Click `Restart Panel`
 
-Then access your panel at:
+Then you can access your panel at:
 
 ```
 https://yourdomain.com/admin/
@@ -156,13 +163,8 @@ https://yourdomain.com/admin/
 To remove everything (including containers and configs):
 
 ```bash
-cd ~/3x-uiPANEL
-docker compose down -v
-docker system prune -a
-sudo apt remove -y docker-ce docker-ce-cli containerd.io caddy
-sudo rm -rf ~/3x-uiPANEL /etc/caddy /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh)
 ```
-
 ---
 
 ## 🧑‍💻 Author
@@ -174,7 +176,7 @@ sudo rm -rf ~/3x-uiPANEL /etc/caddy /usr/share/keyrings/caddy-stable-archive-key
 
 ## 🪪 License
 
-This project is released under the [MIT License](LICENSE).
+This project is released under the [GPL-v3 License](LICENSE)(as the [3X-UI](https://github.com/MHSanaei/3x-ui) project)
 
 ---
 
