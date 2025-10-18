@@ -154,7 +154,7 @@ check_requirements() {
 
     # Check required commands
     local missing_cmds=()
-    for cmd in curl gpg apt-get systemctl lsof; do
+    for cmd in curl gpg apt-get systemctl; do
         if ! command -v $cmd &> /dev/null; then
             missing_cmds+=("$cmd")
         fi
@@ -332,39 +332,35 @@ configure_caddy() {
 
     cat > "$INSTALL_DIR/Caddyfile" <<EOF
 $dom_name {
-	encode gzip
+    encode gzip
 
-	tls {
-		protocols tls1.3
-	}
+    tls {
+        protocols tls1.3
+    }
 
-	header {
-		header_up Authorization {>Authorization}
-		header_up Content-Type {>Content-Type}
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+        -X-Powered-By
+    }
 
-		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-		X-Content-Type-Options nosniff
-		X-Frame-Options SAMEORIGIN
-		Referrer-Policy strict-origin-when-cross-origin
+    route /$route* {
+        basic_auth {
+            $admin_name $hash_pw
+        }
+        reverse_proxy localhost:$be_port
+    }
 
-		-Server
-		-X-Powered-By
-	}
+    route /api/v1* {
+        reverse_proxy localhost:$port
+    }
 
-	route /$route* {
-		basic_auth {
-			$admin_name $hash_pw
-		}
-		reverse_proxy localhost:$be_port
-	}
-
-	route /api/v1* {
-		reverse_proxy localhost:$port
-	}
-
-	route {
-		respond "Not found!" 404
-	}
+    route {
+        respond "Not found!" 404
+    }
 }
 EOF
 
@@ -374,119 +370,138 @@ EOF
 # ───────────────────────────────
 # 3X-UI Panel Auto-Configuration
 # ───────────────────────────────
-login() {
-    local username=$1
-    local password=$2
-    local cookie=$3
-
-    local login_response=$(curl -s -c "$cookie" -X POST \
-        "http://localhost:2053/login" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "username=$username&password=$password" 2>/dev/null)
-
-    if [ ! echo "$login_response" | grep -qi "successfully" ]; then
-        warn "Failed to login to 3X-UI panel"
-        rm -f "$cookie"
-        return 1
-    fi
-
-    success "Logged in with ($username/$password)"
-}
-
 configure_3xui_panel() {
     local port="$1"
     local route="$2"
     local username="$3"
     local password="$4"
 
+    local temp_output="/tmp/3xui_output_$$.txt"
+    local cookie_file="/tmp/3xui_cookies_$$.txt"
+    local base_url="http://localhost:2053"
+
+    trap 'rm -rf "$temp_output" "$cookie_file"' EXIT
+
+    # --- Nested funcs for readability
+    restart_function() {
+        info "Restarting 3X-UI panel..."
+        curl -s --fail -b "$cookie_file" -X POST \
+            "$base_url/panel/setting/restartPanel" \
+            > "$temp_output"
+
+        if grep -Eq '"success":\s*true|successfully' "$temp_output" ; then
+            success "Restarted successfully!"
+        else
+            warn "Could not restart the panel, furthen command may fail"
+        fi
+    }
+
+    login_function() {
+        local login_username=$1
+        local login_password=$2
+        curl -s --fail -c "$cookie_file" -X POST \
+            "$base_url/login" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "username=$login_username&password=$login_password" \
+            > "$temp_output"
+
+        if ! grep -Eq '"success":\s*true|successfully' "$temp_output" ; then
+            warn "Failed to login to 3X-UI panel"
+            rm -f "$cookie_file"
+            return 1
+        else
+            success "Logged in successfully ($login_username/$login_password)!"
+            return 0
+        fi
+
+    }
+    # --- END Nested funcs
+
     info "Configuring 3X-UI panel settings automatically..."
 
-    local max_attempts=31
-    local attemp=0
+    # Wait for 3X-UI to be fully ready
+    local max_attempts=30
+    local attempt=0
 
     info "Waiting for 3X-UI panel to be ready..."
-    while [ $attemp -lt $max_attempts ]; do
-        if curl -s --max-time 2 http://localhost:2053 >/dev/null 2>&1; then
+    while [ $attempt -lt $max_attempts ]; do
+        info "Attemp: $attempt/$max_attempts..."
+        if curl -s --fail "$base_url" >/dev/null 2>&1; then
             success "3X-UI panel is responding!"
             break
         fi
-        attempt=$((attempt+1))
+        attempt=$((attempt + 1))
         sleep 1
     done
 
-if [ $attempt -eq $max_attempts ]; then
+    if [ $attempt -eq $max_attempts ]; then
         warn "Could not verify 3X-UI is ready. Configuration may fail."
         return 1
     fi
 
-    sleep 3
+    sleep 2  # Extra wait for full initialization
 
-    info "Loggin in to 3X-UI panel (admin/admin)..."
-    local cookie_file="/tmp/3xui_cookie_$$.txt"
-    login "admin" "admin" "$cookie_file"
-
-    info "Updating default credentials..."
-    local user_update=$(curl -s -b "$cookie_file" -X POST \
-        "http://localhost:2053/panel/setting/updateUser" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "oldUsername=admin&oldPassword=admin&newUsername=$username&newPassword=$password" 2>/dev/null)
-
-    if echo "$user_update" | grep -qi "successfully"; then
-        success "(admin/admin) => ($username/$password)"
-    else
-        warn "Could not update credentials"
+    # Login and get session cookie
+    info "Logging in to 3X-UI panel..."
+    if ! login_function "admin" "admin"; then
+        error "Initial login with (admin/admin) failed. Aborting..."
+        return 1
     fi
 
-    info "Restarting 3X-UI panel..."
-    local restart=$(curl -s -b "$cookie_file" -X POST \
-        "http://localhost:2053/panel/setting/restartPanel" >/dev/null 2>&1)
-    if [ echo "$restart" | grep -qi "successfully" ]; then
-        success "Restarted successfully"
+    # Update admin credentials
+    info "Updating admin credentials..."
+    curl -s --fail -b "$cookie_file" -X POST \
+        "$base_url/panel/setting/updateUser" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "oldUsername=admin&oldPassword=admin&newUsername=$username&newPassword=$password" \
+        > "$temp_output"
+
+    if grep -Eq '"success":\*true|successfully' "$temp_output" ; then
+        success "Admin credentials updated!"
     else
-        error "Could not restart"
+        warn "Could not update credentials automatically"
     fi
 
-    info "Logging in to 3X-UI panel ($usernamej/$password)..."
-    login "$username" "$password" $cookie_file
-    success "Logged in (again)"
+    restart_function
 
-    info "Updating panel port to $port and path to /$route"
+    # re-Login
+    if ! login_function "$username" "$password"; then
+        error "Login with update credentials failed. Aborting..."
+        return 1
+    fi
 
-    local update_response=$(curl -s -b "$cookie_file" -X POST \
-        "http://localhost:2053/panel/setting/update" \
+    # Update panel settings
+    info "Updating panel port to $port and path to /$route..."
+    curl -s --fail -b "$cookie_file" -X POST \
+        "$base_url/panel/setting/update" \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "webPort=$port&subPort=2096&webBasePath=/$route&webCertFile=&webKeyFile=" 2>/dev/null)
+        -d "webPort=$port&subPort=2096&webBasePath=/$route&webCertFile=&webKeyFile=" \
+        > "$temp_output"
 
-    if [ echo "$update_response" | grep -qi "successfully" ]; then
-        success "Port=$port Path=$route"
+    if grep -Eq '"success":\*true|successfully' "$temp_output" ; then
+        success "Panel settings updated!"
     else
         warn "Could not update panel settings automatically"
+        rm -f "$cookie_file"
+        return 1
     fi
 
-    rm -f "$cookie_file"
+    restart_function
 
-    info "Restarting 3X-UI panel..."
-    local restart_again=$(curl -s -b "$cookie_file" -X POST \
-        "http://localhost:2053/panel/setting/restartPanel" >/dev/null 2>&1)
-    if [ echo "$restart_again" | grep -qi "successfully" ]; then
-        success "Restarted successfully"
-    else
-        error "Could not restart"
-    fi
+    info "Waiting for panel to restart..."
 
-    info "Waiting for panel restart..."
-    sleep 8
-    local verify_attempt=0
-    while [ $verify_attempt -lt 10 ]; do
-        if curl -s "http://localhost:$port" >/dev/null 2>&1; then
+    local verify_attempts=0
+    while [ $verify_attempts -lt 10 ]; do
+        info "Attemp: $verify_attempts"
+        if curl -s --fail "http://localhost:$port" >/dev/null 2>&1; then
             success "Panel is accessible on new port $port!"
             return 0
         fi
-        verify_attempt=$((verify_attempt + 1))
+        verify_attempts=$((verify_attempts + 1))
         sleep 1
     done
 
-    warn "Could not verify panel on new port, but setting were applied"
+    warn "Could not verify panel on new port, but settings were applied"
     return 0
 }
 
@@ -534,21 +549,9 @@ caddy_install() {
         echo ""
         read -p "Press Enter to continue..."
     else
-        while true
-        do
-            read -sp "Enter admin password [default: admin]: " PASSWORD
-            echo ""
-            PASSWORD=${PASSWORD:-admin}
-            read -sp "Enter admin password again: " local check_password
-            echo ""
-            check_password=${check_password:-admin}
-            if [ "$PASSWORD" != "$check_password" ]; then
-                echo -e "${RED}Passwords did NOT match${NC}"
-                echo -e "${RED}Password not set, try again...${NC}"
-            else
-                break
-            fi
-        done
+        read -sp "Enter admin password [default: admin]: " PASSWORD
+        echo ""
+        PASSWORD=${PASSWORD:-admin}
         if [ "$PASSWORD" == "admin" ]; then
             warn "Using default password 'admin' - consider changing this later!"
         fi
@@ -558,7 +561,7 @@ caddy_install() {
 
     # Route configuration
     echo ""
-    read -p "Enter route nickname (panel will be at /<name>-admin) [default: admin]: " N_NAME
+    read -p "Enter route nickname (panel will be at /<n>-admin) [default: admin]: " N_NAME
     N_NAME=${N_NAME:-admin}
     ROUTE="${N_NAME}-admin"
     if [ "$N_NAME" == "admin" ]; then
@@ -604,24 +607,57 @@ caddy_install() {
 
     if systemctl is-active --quiet caddy; then
         success "Caddy is running!"
-        echo -e "${RED}${BOLD}!ATTENTION!${NC}"
-        echo -e "${GREEN}Open URL: ${YELLOW}http://$dom_name:2053"
-        echo -e "${GREEN}Open      \"${YELLOW}${BOLD}Panel Settings${GREEN}\"${NC}"
-        echo -e "${GREEN}Change    \"${YELLOW}${BOLD}Listen Port${GREEN}\" to ${BLUE}$BE_PORT${NC}"
-        echo -e "${GREEN}Change    \"${YELLOW}${BOLD}URI Path${NC}${GREEN}\" to ${BLUE}${BOLD}/$ROUTE$/{NC}"
-        echo -e "${GREEN}Click     ${BLUE}${BOLD}Save${NC}"
-        echo -e "${GREEN}Click     ${BLUE}${BOLD}Restart Panel${NC}"
-        echo -e "Press ${YELLOW}Enter${NC} if your webPanel closed after you've restarted"
-        read
         echo ""
-        banner "═══════════════════════════════════════════════════════════"
-        banner "               3X-UI Panel Access Information"
-        banner "═══════════════════════════════════════════════════════════"
-        echo -e "${GREEN}Panel URL:${NC}      https://$dom_name/$ROUTE"
-        echo -e "${GREEN}Admin User:${NC}     $ADMIN_NAME"
-        echo -e "${GREEN}Password:${NC}       $PASSWORD"
-        echo -e "${GREEN}API Endpoint:${NC}   https://$dom_name/api/v1"
-        banner "═══════════════════════════════════════════════════════════"
+
+        # Try automatic 3X-UI configuration
+        if configure_3xui_panel "$PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD"; then
+            # Automatic configuration succeeded
+            sudo systemctl restart caddy
+            echo ""
+            banner "═══════════════════════════════════════════════════════════"
+            banner "    ✓ 3X-UI Panel Configured Automatically!"
+            banner "═══════════════════════════════════════════════════════════"
+            echo -e "${GREEN}Panel URL:${NC}      https://$dom_name/$ROUTE"
+            echo -e "${GREEN}Admin User:${NC}     $ADMIN_NAME"
+            echo -e "${GREEN}Password:${NC}       $PASSWORD"
+            echo -e "${GREEN}API Endpoint:${NC}   https://$dom_name/api/v1"
+            banner "═══════════════════════════════════════════════════════════"
+        else
+            # Automatic configuration failed - show manual steps
+            echo ""
+            echo -e "${RED}${BOLD}!ATTENTION! - MANUAL SETUP REQUIRED${NC}"
+            echo ""
+            warn "Automatic configuration failed. Please complete these steps manually:"
+            echo ""
+            echo -e "${YELLOW}Step-by-step instructions:${NC}"
+            echo ""
+            echo -e "  1. Open: ${CYAN}http://$dom_name:2053${NC}"
+            echo -e "  2. Login with default credentials: ${GREEN}admin${NC} / ${GREEN}admin${NC}"
+            echo -e "  3. Navigate to: ${YELLOW}Panel Settings${NC}"
+            echo -e "  4. Change ${YELLOW}Listen Port${NC} to: ${BLUE}$PORT${NC}"
+            echo -e "  5. Change ${YELLOW}URI Path${NC} to: ${BLUE}/$ROUTE${NC}"
+            echo -e "  6. Click ${BLUE}Save${NC}"
+            echo -e "  7. Navigate to: ${YELLOW}Authentication${NC}"
+            echo -e "  8. Enter ${YELLOW}Current Username${NC}: ${BLUE}admin${NC}"
+            echo -e "  9. Enter ${YELLOW}Current Password${NC}: ${BLUE}admin${NC}"
+            echo -e "  8. Enter ${YELLOW}New Username${NC}: ${BLUE}$ADMIN_NAME${NC}"
+            echo -e "  9. Enter ${YELLOW}New Password${NC}: ${BLUE}$PASSWORD${NC}"
+            echo -e " 10. Click ${BLUE}Save${NC}"
+            echo -e " 11. Click ${BLUE}Restart Panel${NC}"
+            echo ""
+            echo -e "${YELLOW}Note: The panel will close after restart.${NC}"
+            echo ""
+            read -p "Press Enter after completing these steps and the panel has restarted..."
+            echo ""
+            banner "═══════════════════════════════════════════════════════════"
+            banner "               3X-UI Panel Access Information"
+            banner "═══════════════════════════════════════════════════════════"
+            echo -e "${GREEN}Panel URL:${NC}      https://$dom_name/$ROUTE"
+            echo -e "${GREEN}Admin User:${NC}     $ADMIN_NAME"
+            echo -e "${GREEN}Password:${NC}       $PASSWORD"
+            echo -e "${GREEN}API Endpoint:${NC}   https://$dom_name/api/v1"
+            banner "═══════════════════════════════════════════════════════════"
+        fi
     else
         error "Caddy failed to start!"
         sudo journalctl -u caddy -n 50 --no-pager
@@ -779,3 +815,4 @@ main() {
 }
 
 main "$@"
+

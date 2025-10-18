@@ -478,7 +478,7 @@ configure_3xui_panel() {
         -d "webPort=$port&subPort=2096&webBasePath=/$route&webCertFile=&webKeyFile=" \
         > "$temp_output"
 
-    if grep -i '"success":\*true|successfully' "$temp_output" ; then
+    if grep -Eq '"success":\*true|successfully' "$temp_output" ; then
         success "Panel settings updated!"
     else
         warn "Could not update panel settings automatically"

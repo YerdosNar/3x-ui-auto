@@ -68,7 +68,15 @@ confirm_uninstall() {
 
     echo ""
     warn "Starting uninstallation in 5 seconds... Press Ctrl+C to cancel!"
-    sleep 5
+    for i in {5..1}; do
+        if [ "$i" -eq 1 ]
+            echo -ne "\rStarting uninstallation in $i second... Press Ctrl+C to cancel!   "
+        else
+            echo -ne "\rStarting uninstallation in $i seconds... Press Ctrl+C to cancel!   "
+        fi
+        sleep 1
+    done
+    echo -e "\n"
 }
 
 # ───────────────────────────────
@@ -117,7 +125,7 @@ remove_install_dir() {
 
         read -p "Delete this directory and all its contents? [y/N]: " DELETE_DIR
         if [[ "$DELETE_DIR" =~ ^[Yy]$ ]]; then
-            rm -rf "$INSTALL_DIR"
+            sudo rm -rf "$INSTALL_DIR"
             success "Installation directory removed!"
         else
             warn "Keeping installation directory at: $INSTALL_DIR"
