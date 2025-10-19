@@ -67,13 +67,26 @@ confirm_uninstall() {
     fi
 
     echo ""
-    warn "Starting uninstallation in 5 seconds... Press Ctrl+C to cancel!"
-    for i in {5..1}; do
-        if [ "$i" -eq 1 ]
-            echo -ne "\rStarting uninstallation in $i second... Press Ctrl+C to cancel!   "
-        else
-            echo -ne "\rStarting uninstallation in $i seconds... Press Ctrl+C to cancel!   "
-        fi
+    warn "Starting uninstallation in 8 seconds... Press Ctrl+C to cancel!"
+    for i in {8..1}; do
+        case "$i" in
+            '8')
+                echo -e "\r[##--------------] $i seconds left..." ;;
+            '7')
+                echo -e "\r[####------------] $i seconds left..." ;;
+            '6')
+                echo -e "\r[######----------] $i seconds left..." ;;
+            '5')
+                echo -e "\r[########--------] $i seconds left..." ;;
+            '4')
+                echo -e "\r[########${YELLOW}##${NC}------] $i seconds left..." ;;
+            '3')
+                echo -e "\r[########${YELLOW}####${NC}----] $i seconds left..." ;;
+            '2')
+                echo -e "\r[########${YELLOW}####${RED}##${NC}--] $i seconds left..." ;;
+            '1')
+                echo -e "\r[########${YELLOW}####${RED}####${NC}] $i second left..." ;;
+        esac
         sleep 1
     done
     echo -e "\n"
