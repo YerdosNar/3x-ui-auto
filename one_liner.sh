@@ -620,7 +620,7 @@ caddy_install() {
         echo ""
 
         # Try automatic 3X-UI configuration
-        if configure_3xui_panel "$PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD"; then
+        if configure_3xui_panel "$BE_PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD"; then
             # Automatic configuration succeeded
             sudo systemctl restart caddy
             echo ""
