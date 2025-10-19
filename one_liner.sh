@@ -425,7 +425,7 @@ configure_3xui_panel() {
 
     info "Waiting for 3X-UI panel to be ready..."
     while [ $attempt -lt $max_attempts ]; do
-        info "Attemp: $attempt/$max_attempts..."
+	info "Attempt: $((attempt + 1))/$max_attempts..."
         if curl -s --fail "$base_url" >/dev/null 2>&1; then
             success "3X-UI panel is responding!"
             break
@@ -478,7 +478,7 @@ configure_3xui_panel() {
         -d "webPort=$port&subPort=2096&webBasePath=/$route&webCertFile=&webKeyFile=" \
         > "$temp_output"
 
-    if grep -Eq '"success":\*true|successfully' "$temp_output" ; then
+    if grep -Eq 'The parameters have been changed' "$temp_output" ; then
         success "Panel settings updated!"
     else
         warn "Could not update panel settings automatically"
@@ -492,8 +492,8 @@ configure_3xui_panel() {
 
     local verify_attempts=0
     while [ $verify_attempts -lt 10 ]; do
-        info "Attemp: $verify_attempts"
-        if curl -s --fail "http://localhost:$port" >/dev/null 2>&1; then
+        info "Attempt: $((verify_attempts + 1))"
+        if curl -s --fail "http://localhost:$port/$route" >/dev/null 2>&1; then
             success "Panel is accessible on new port $port!"
             return 0
         fi
@@ -549,9 +549,19 @@ caddy_install() {
         echo ""
         read -p "Press Enter to continue..."
     else
-        read -sp "Enter admin password [default: admin]: " PASSWORD
-        echo ""
-        PASSWORD=${PASSWORD:-admin}
+        while true;
+        do
+            read -sp "Enter admin password [default: admin]: " PASSWORD
+            PASSWORD=${PASSWORD:-admin}
+            echo ""
+            local check_password
+            read -sp "Enter admin password again: " check_password
+            echo ""
+            if [ "$PASSWORD" == "$check_password" ]; then
+                break
+            fi
+
+        done
         if [ "$PASSWORD" == "admin" ]; then
             warn "Using default password 'admin' - consider changing this later!"
         fi
@@ -815,4 +825,3 @@ main() {
 }
 
 main "$@"
-
