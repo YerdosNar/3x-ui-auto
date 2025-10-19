@@ -21,9 +21,9 @@ readonly BOLD="\033[1m"
 # Logging Functions
 # ───────────────────────────────
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[✓]${NC} $1"; }
-warn()    { echo -e "${YELLOW}[!]${NC} $1"; }
-error()   { echo -e "${RED}[✗]${NC} $1" >&2; }
+success() { echo -e "${GREEN}[✓]${NC}    $1"; }
+warn()    { echo -e "${YELLOW}[!]${NC}    $1"; }
+error()   { echo -e "${RED}[✗]${NC}    $1" >&2; }
 banner()  { echo -e "${CYAN}${BOLD}$1${NC}"; }
 
 # ───────────────────────────────
@@ -70,23 +70,28 @@ confirm_uninstall() {
     warn "Starting uninstallation in 8 seconds... Press Ctrl+C to cancel!"
     for i in {8..1}; do
         case "$i" in
-            '8')
-                echo -e "\r[##--------------] $i seconds left..." ;;
-            '7')
-                echo -e "\r[####------------] $i seconds left..." ;;
-            '6')
-                echo -e "\r[######----------] $i seconds left..." ;;
-            '5')
-                echo -e "\r[########--------] $i seconds left..." ;;
-            '4')
-                echo -e "\r[########${YELLOW}##${NC}------] $i seconds left..." ;;
-            '3')
-                echo -e "\r[########${YELLOW}####${NC}----] $i seconds left..." ;;
-            '2')
-                echo -e "\r[########${YELLOW}####${RED}##${NC}--] $i seconds left..." ;;
-            '1')
-                echo -e "\r[########${YELLOW}####${RED}####${NC}] $i second left..." ;;
+            8)
+              bar="[##--------------]" ;;
+            7)
+              bar="[####------------]" ;;
+            6)
+              bar="[######----------]" ;;
+            5)
+              bar="[########--------]" ;;
+            4)
+              bar="[########${YELLOW}##${NC}------]" ;;
+            3)
+              bar="[########${YELLOW}####${NC}----]" ;;
+            2)
+              bar="[########${YELLOW}####${RED}##${NC}--]" ;;
+            1)
+                bar="[########${YELLOW}####${RED}####${NC}]" ;;
         esac
+        if [ "$i" -eq 1 ]; then
+            echo -ne "\r$bar ${BOLD}${RED}$i${NC} second left..."
+        else
+            echo -ne "\r$bar $i seconds left..."
+        fi
         sleep 1
     done
     echo -e "\n"

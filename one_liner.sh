@@ -20,9 +20,9 @@ readonly BOLD="\033[1m"
 # Logging Functions
 # ───────────────────────────────
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[✓]${NC} $1"; }
-warn()    { echo -e "${YELLOW}[!]${NC} $1"; }
-error()   { echo -e "${RED}[✗]${NC} $1" >&2; }
+success() { echo -e "${GREEN}[✓]${NC}    $1"; }
+warn()    { echo -e "${YELLOW}[!]${NC}    $1"; }
+error()   { echo -e "${RED}[✗]${NC}    $1" >&2; }
 banner()  { echo -e "${CYAN}${BOLD}$1${NC}"; }
 
 # ───────────────────────────────
