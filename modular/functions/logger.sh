@@ -41,19 +41,19 @@ log_info() {
 
 log_success() {
     local msg="$1"
-    echo -e "${GREEN}[✓]${NC} $msg"
+    echo -e "${GREEN} [✓]${NC}   $msg"
     echo "[SUCCESS] $(date '+%Y-%m-%d %H:%M:%S') - $msg" >> "$LOG_FILE"
 }
 
 log_warn() {
     local msg="$1"
-    echo -e "${YELLOW}[!]${NC} $msg"
+    echo -e "${YELLOW} [!]${NC}   $msg"
     echo "[WARNING] $(date '+%Y-%m-%d %H:%M:%S') - $msg" >> "$LOG_FILE"
 }
 
 log_error() {
     local msg="$1"
-    echo -e "${RED}[✗]${NC} $msg" >&2
+    echo -e "${RED} [✗]${NC}   $msg" >&2
     echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') - $msg" >> "$LOG_FILE"
 }
 
