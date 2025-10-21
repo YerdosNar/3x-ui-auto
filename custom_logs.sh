@@ -4,13 +4,13 @@
 # ───────────────────────────────
 # ANSI Colors
 # ───────────────────────────────
-local NC="\033[0m"
-local RED="\033[31m"
-local GREEN="\033[32m"
-local YELLOW="\033[33m"
-local BLUE="\033[34m"
-local CYAN="\033[36m"
-local BOLD="\033[1m"
+custom_nc="\033[0m"
+custom_red="\033[31m"
+custom_green="\033[32m"
+custom_yellow="\033[33m"
+custom_blue="\033[34m"
+custom_cyan="\033[36m"
+custom_bold="\033[1m"
 
 # ───────────────────────────────
 # Logging Functions
@@ -18,11 +18,11 @@ local BOLD="\033[1m"
 # ───────────────────────────────
 # Start
 # ───────────────────────────────
-echo -e "${CYAN}${BOLD}═══════════════════════════════════════════════════════════"
+echo -e "${custom_cyan}${custom_bold}═══════════════════════════════════════════════════════════"
 echo -e "         ✓ 3X-UI Panel (with custom logs)!"
-echo -e "═══════════════════════════════════════════════════════════${NC}"
-echo -e "This scipt saves logs into ${YELLOW}/tmp/.3xui_install_logs_*.txt${NC}"
-echo -e "Press ${YELOW}ENTER${NC} to continue..."
+echo -e "═══════════════════════════════════════════════════════════${custom_nc}"
+echo -e "This scipt saves logs into ${custom_yellow}/tmp/.3xui_install_logs_*.txt${custom_nc}"
+echo -e "Press ${custom_yellow}ENTER${custom_nc} to continue..."
 read
 
 
@@ -30,17 +30,17 @@ read
 # Start
 # ───────────────────────────────
 install_dir="$HOME/TEMP_3X_INSTALLER_DIR_$$"
-echo -e "${BLUE}[INFO]${NC} Creating Temporal directory"
+echo -e "${custom_blue}[INFO]${custom_nc} Creating Temporal directory"
 mkdir "$install_dir"
 
 
 # ───────────────────────────────
 # Cloning repo
 # ───────────────────────────────
-echo -e "${BLUE}[INFO]${NC} Cloning into \"$install_dir\""
+echo -e "${custom_blue}[INFO]${custom_nc} Cloning into \"$install_dir\""
 git clone https://github.com/YerdosNar/3x-ui-auto.git "$install_dir"
 cd $install_dir/modular
-echo -e "${BLUE}[INFO]${NC} Making scripts executable"
+echo -e "${custom_blue}[INFO]${custom_nc} Making scripts executable"
 chmod +x install.sh
 chmod +x functions/*.sh
 
@@ -54,8 +54,8 @@ if [[ "$start_install" =~ ^[Yy]$ ]]; then
     ./install.sh
 else
     echo "You can start later manually"
-    echo -e "Run ${GREEN}install.sh${NC} inside ${GREEN}$install_dir/modular${NC} directory"
-    echo -e "${BLUE}[INFO]${NC} Exitting..."
+    echo -e "Run ${custom_green}install.sh${custom_nc} inside ${custom_green}$install_dir/modular${custom_nc} directory"
+    echo -e "${custom_blue}[INFO]${custom_nc} Exitting..."
     exit 0
 fi
 
@@ -64,14 +64,14 @@ if [ "$?" == '0' ]; then
     read -p "Remove temporal directory with source code [Y/n]: " remove_choice
     remove_choice=${remove_choice:-Y}
     if [[ "$remove_choice" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}[INFO]${NC} Removing directory..."
+        echo -e "${custom_blue}[INFO]${custom_nc} Removing directory..."
         cd $HOME
         rm -rf $install_dir
     else
-        echo -e "${BLUE}[INFO]${NC} Exiting..."
+        echo -e "${custom_blue}[INFO]${custom_nc} Exiting..."
         exit 0
     fi
 else
-    echo -e "${RED}[ERROR]${NC} Installation failed..."
-    echo -e "${CYAN}Check log files \"${YELLOW}/tmp/.3xui_install_logs_$$.txt${CYAN}\" for troubleshooting.${NC}"
+    echo -e "${custom_red}[ERROR]${custom_nc} Installation failed..."
+    echo -e "${custom_cyan}Check log files \"${custom_yellow}/tmp/.3xui_install_logs_$$.txt${custom_cyan}\" for troubleshooting.${custom_nc}"
 fi
