@@ -142,16 +142,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/on
 # -> Select "y" and provide your domain name
 # -> Choose to install Caddy for HTTPS
 ```
-#### Before you open webPanel:
-- Open URL: `http://yourdomain.com:2053`
-- Go to `Panel Settings`
-- Change `Listen Port` to the backend port you chose previously
-- Change `URI Path` to the path route you set previously
-- Click `Save`
-- Click `Restart Panel`
-
 Then you can access your panel at:
-
 ```
 https://yourdomain.com/admin/
 ```
@@ -176,7 +167,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/un
 
 ## 🪪 License
 
-This project is released under the [GPL-v3 License](LICENSE)(as the [3X-UI](https://github.com/MHSanaei/3x-ui) project)
+This project is released under the [GPL-v3 License](LICENSE) (as the [3X-UI](https://github.com/MHSanaei/3x-ui) project)
 
 ---
 

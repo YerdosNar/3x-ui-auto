@@ -5,7 +5,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 
 readonly STATE_FILE="/tmp/.3xui_install_state"
-readonly INSTALL_DIR="$HOME/3x-uiPANEL"
+readonly INSTALL_DIR="$HOME/3x-uiPANEL_$$"
 
 # Save installation state
 save_state() {
