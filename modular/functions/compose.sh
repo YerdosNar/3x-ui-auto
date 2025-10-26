@@ -22,7 +22,7 @@ create_compose() {
 services:
   3xui:
     image: ghcr.io/mhsanaei/3x-ui:latest
-    container_name: 3xui_app
+    container_name: 3xui_app_$$
 $c_dom_name
     volumes:
       - "\${PWD}/db/:/etc/x-ui/"
