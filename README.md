@@ -1,6 +1,6 @@
 # 🧩 3X-UI Auto Installer (Docker + Caddy)
 
-This project provides a **one-liner automatic installer** for the [3X-UI panel](https://github.com/mhsanaei/3x-ui) on **Ubuntu** servers.
+This project provides a **one-liner automatic installer** or **modular automatic installer** for the [3X-UI panel](https://github.com/mhsanaei/3x-ui) on **Ubuntu** servers.
 
 It installs:
 - 🐳 **[Docker & Docker Compose](https://docs.docker.com/engine/install/ubuntu/)**
@@ -9,14 +9,19 @@ It installs:
 
 ---
 
-## 🚀 Quick Installation
-
-Run this single command on a clean Ubuntu system:
+## 🚀 Quick Installation [one_liner](https://github.com/YerdosNar/3x-ui-auto/blob/master/one_liner.sh)
+Installs automatically.
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/one_liner.sh)
 ````
 
+## 🚀 Quick Installation [custom_logs](https://github.com/YerdosNar/3x-ui-auto/blob/master/custom_logs.sh)
+Does the same, but it also generates log file for troubleshooting.
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/custom_logs.sh)
+````
 > ⚠️ The script requires `sudo` privileges.
 > It will automatically install and configure Docker, 3X-UI, and optionally Caddy for HTTPS access.
 
@@ -157,6 +162,9 @@ To remove everything (including containers and configs):
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh)
 ```
 ---
+
+## 📑 Reading
+You can read the modularized code in [modular](https://github.com/YerdosNar/3x-ui-auto/tree/master/modular) directory.
 
 ## 🧑‍💻 Author
 

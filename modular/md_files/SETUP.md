@@ -4,84 +4,10 @@ This guide shows how to create the complete modularized project structure.
 
 ## 🚀 Quick Setup Commands
 
-### Option 1: Manual Setup
+### Option 1: Auto Setup
 
 ```bash
-# Create project directory
-mkdir -p 3x-ui-auto/functions
-cd 3x-ui-auto
-
-# Create main install script
-cat > install.sh << 'EOF'
-[Copy content from install.sh artifact]
-EOF
-
-# Make it executable
-chmod +x install.sh
-
-# Create function modules
-cd functions
-
-# Create logger.sh
-cat > logger.sh << 'EOF'
-[Copy content from functions/logger.sh artifact]
-EOF
-
-# Create config.sh
-cat > config.sh << 'EOF'
-[Copy content from functions/config.sh artifact]
-EOF
-
-# Create validators.sh
-cat > validators.sh << 'EOF'
-[Copy content from functions/validators.sh artifact]
-EOF
-
-# Create utils.sh
-cat > utils.sh << 'EOF'
-[Copy content from functions/utils.sh artifact]
-EOF
-
-# Create requirements.sh
-cat > requirements.sh << 'EOF'
-[Copy content from functions/requirements.sh artifact]
-EOF
-
-# Create docker.sh
-cat > docker.sh << 'EOF'
-[Copy content from functions/docker.sh artifact]
-EOF
-
-# Create compose.sh
-cat > compose.sh << 'EOF'
-[Copy content from functions/compose.sh artifact]
-EOF
-
-# Create panel.sh
-cat > panel.sh << 'EOF'
-[Copy content from functions/panel.sh artifact]
-EOF
-
-# Create caddy.sh
-cat > caddy.sh << 'EOF'
-[Copy content from functions/caddy.sh artifact]
-EOF
-
-# Make all function modules executable
-chmod +x *.sh
-
-# Return to project root
-cd ..
-
-# Create README
-cat > README.md << 'EOF'
-[Copy content from README.md artifact]
-EOF
-
-# Create documentation
-cat > PROJECT_STRUCTURE.md << 'EOF'
-[Copy content from PROJECT_STRUCTURE.md artifact]
-EOF
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/log_installer.sh)
 ```
 
 ### Option 2: Clone from Repository
@@ -89,7 +15,7 @@ EOF
 ```bash
 # Clone the repository
 git clone https://github.com/YerdosNar/3x-ui-auto.git
-cd 3x-ui-auto
+cd 3x-ui-auto/modular
 
 # Make install script executable
 chmod +x install.sh
@@ -106,28 +32,30 @@ chmod +x functions/*.sh
 After setup, verify the structure:
 
 ```bash
-tree -L 2 3x-ui-auto/
+tree -L 2 3x-ui-auto/modular
 ```
 
 Expected output:
 ```
-3x-ui-auto/
-├── install.sh
+3x-ui-auto/modular
 ├── functions
-│   ├── caddy.sh
-│   ├── compose.sh
-│   ├── config.sh
-│   ├── docker.sh
-│   ├── logger.sh
-│   ├── panel.sh
-│   ├── requirements.sh
-│   ├── utils.sh
-│   └── validators.sh
-├── README.md
-├── PROJECT_STRUCTURE.md
-└── SETUP.md
+│   ├── caddy.sh
+│   ├── compose.sh
+│   ├── config.sh
+│   ├── docker.sh
+│   ├── logger.sh
+│   ├── panel.sh
+│   ├── requirements.sh
+│   ├── setup.sh
+│   ├── utils.sh
+│   └── validators.sh
+├── install.sh
+└── md_files
+    ├── PROJECT_STRUCTURE.md
+    ├── README.md
+    └── SETUP.md
 
-1 directory, 13 files
+3 directories, 14 files
 ```
 
 ## 🔧 Configuration Check

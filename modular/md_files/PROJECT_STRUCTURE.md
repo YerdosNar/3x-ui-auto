@@ -163,25 +163,3 @@
                  │
                  └──> Installation complete!
 ```
-
-## 📊 Module Dependencies
-
-```
-install.sh
-    │
-    ├──> logger.sh (required first - used by all)
-    │
-    ├──> config.sh
-    │    └──> Uses: logger.sh
-    │
-    ├──> validators.sh
-    │    └──> Uses: logger.sh
-    │
-    ├──> utils.sh
-    │    └──> Uses: logger.sh
-    │
-    ├──> requirements.sh
-    │    └──> Uses: logger.sh
-    │
-    ├──> docker.sh
-    │    └──>

@@ -24,9 +24,16 @@ Automated installation script for 3X-UI panel with Docker and Caddy reverse prox
 
 ### Installation
 
+- #### Automated
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/custom_logs.sh)
+```
+Creates a temporal directory, where it will store necessary scripts. And upon completion, it deletes the directory with scripts by user's choice.
+
+- #### Manual
 ```bash
 git clone https://github.com/YerdosNar/3x-ui-auto.git
-cd 3x-ui-auto
+cd 3x-ui-auto/modular
 chmod +x install.sh
 ./install.sh
 ```
