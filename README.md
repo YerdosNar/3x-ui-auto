@@ -1,170 +1,249 @@
-# 🧩 3X-UI Auto Installer (Docker + Caddy)
+# 🚀 3X-UI Auto Installer
 
-This project provides a **one-liner automatic installer** or **modular automatic installer** for the [3X-UI panel](https://github.com/mhsanaei/3x-ui) on **Ubuntu** servers.
+**Automated one-liner installer** for [3X-UI panel](https://github.com/mhsanaei/3x-ui) with Docker, Caddy reverse proxy, smart firewall, and network optimization.
 
-It installs:
-- 🐳 **[Docker & Docker Compose](https://docs.docker.com/engine/install/ubuntu/)**
-- 🔒 **[Caddy](https://caddyserver.com/docs/) (Reverse Proxy with HTTPS)**
-- ⚙️ **[3X-UI panel](https://github.com/MHSanaei/3x-ui) container automatically configured**
+## ✨ Features
+
+- 🐳 **Docker & Docker Compose** - Automatic installation and configuration
+- 🔒 **Caddy Reverse Proxy** - HTTPS with automatic SSL certificates
+- 🛡️ **Smart Firewall (UFW)** - Auto-detects and opens required ports
+- ⚡ **Network Optimization** - BBR congestion control for 20-30x faster speeds
+- 🎯 **Smart Port Detection** - Never locks you out of SSH
+- 🔧 **Automatic Configuration** - 3X-UI panel ready to use
+- 📊 **Multiple Installations** - Support for multiple 3X-UI instances
 
 ---
 
-## 🚀 Quick Installation [one_liner](https://github.com/YerdosNar/3x-ui-auto/blob/master/one_liner.sh)
-Installs automatically.
+## 🚀 Quick Start
+
+### One-Liner Installation
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/one_liner.sh)
-````
+```
 
-## 🚀 Quick Installation [custom_logs](https://github.com/YerdosNar/3x-ui-auto/blob/master/custom_logs.sh)
-Does the same, but it also generates log file for troubleshooting.
+### Modular Installation (Recommended)
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/modular/install.sh)
+```
+
+### With Logging (for troubleshooting)
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/custom_logs.sh)
-````
-> ⚠️ The script requires `sudo` privileges.
-> It will automatically install and configure Docker, 3X-UI, and optionally Caddy for HTTPS access.
+```
+
+> ⚠️ Requires `sudo` privileges and Ubuntu/Debian system
 
 ---
 
-## 🧠 What This Script Does
+## 📋 What Gets Installed
 
-1. **Installs Docker and Docker Compose**
+### Core Components
+1. **Docker & Docker Compose** - Container runtime
+2. **3X-UI Panel** - Web-based VPN/proxy management
+3. **Caddy (Optional)** - HTTPS reverse proxy with auto SSL
 
-   * Removes any old Docker versions
-   * Adds the official Docker repository
-   * Installs and verifies Docker engine
-
-2. **Deploys the 3X-UI Panel**
-
-   * Creates a `3x-uiPANEL/compose.yml` file
-   * Runs the container in host network mode
-   * Maps config & certificate folders automatically
-
-3. **Optionally Installs and Configures Caddy**
-
-   * Automatically installs from the official repository
-   * Generates a secure `Caddyfile` with HTTPS enabled
-   * Sets up Basic Auth for the admin route
-   * Configures reverse proxy rules for API and backend
+### Optional Enhancements
+4. **UFW Firewall** - Smart port management and security
+5. **Network Optimization** - BBR congestion control and TCP tuning
 
 ---
 
-## 🌐 Access Information
+## 🎯 Installation Process
 
-After installation, the script displays:
+The installer will guide you through:
 
-| Access Type         | Example URL                  | Default Login           |
-| ------------------- | ---------------------------- | ----------------------- |
-| Without Domain      | `http://YOUR_SERVER_IP:2053` | `admin / admin`         |
-| With Domain + Caddy | `https://yourdomain.com`     | (Your admin + password) |
+1. **Domain Setup** - Enter your domain or use IP address
+2. **Caddy Configuration** (if domain provided)
+   - Admin credentials
+   - Route path (e.g., `/admin`)
+   - API and backend ports
+3. **Network Optimization** - Apply BBR and TCP tuning (recommended)
+4. **Firewall Setup** - Configure UFW with smart port detection (recommended)
 
 ---
 
-## ⚙️ Optional Configuration Prompts
+## 🌐 Access Your Panel
 
-During installation, you’ll be asked:
+After installation:
 
-* Do you have a domain name? (`y/n`)
+| Setup Type | URL | Default Login |
+|------------|-----|---------------|
+| **With Domain** | `https://yourdomain.com/admin` | Your custom credentials |
+| **Without Domain** | `http://YOUR_IP:2053` | `admin` / `admin` |
 
-  * If yes: enter your domain, and optionally install **Caddy** for HTTPS.
-  * If no: script uses your **public IP** instead (HTTP only).
+> ⚠️ **Change default credentials immediately** if not using Caddy!
 
-* If installing Caddy, you’ll also set:
+---
 
-  * Admin username & password (used for Basic Auth)
-  * Route nickname (e.g., `/mypanel-admin`)
-  * Ports for API and backend
+## 🛡️ Firewall & Network Features
+
+### Smart Firewall (UFW)
+- ✅ Auto-detects SSH port (never locks you out!)
+- ✅ Opens required ports: HTTP (80), HTTPS (443), 3X-UI (2053)
+- ✅ Configures port ranges for VPN inbounds (8380-8400, 9380-9400)
+- ✅ Enables IP forwarding for proxy functionality
+
+### Network Optimization
+- ⚡ **BBR Congestion Control** - 20-30x faster speeds
+- 📦 **Fair Queue Scheduling** - Reduced latency
+- 💾 **64MB TCP Buffers** - Better throughput
+- 🚀 **TCP Fast Open** - Faster connections
+
+**Performance:** Shadowsocks/VLESS speeds improved from 5 Mbps to **150-170 Mbps**!
+
+📖 **Details:** See [Firewall & Network Guide](modular/md_files/FIREWALL_NETWORK_GUIDE.md)
+
+---
+
+## 🔧 Useful Commands
+
+### Docker Management
+```bash
+cd ~/3x-uiPANEL*
+docker compose up -d        # Start
+docker compose down         # Stop
+docker compose restart      # Restart
+docker compose logs -f      # View logs
+```
+
+### Caddy Management
+```bash
+sudo systemctl status caddy    # Check status
+sudo systemctl restart caddy   # Restart
+sudo caddy validate            # Test config
+```
+
+### Firewall Management
+```bash
+sudo ufw status               # View rules
+sudo ufw allow 9000/tcp       # Open port
+sudo ufw delete allow 9000    # Close port
+```
+
+### Network Check
+```bash
+sysctl net.ipv4.tcp_congestion_control  # Check BBR
+sysctl net.core.default_qdisc           # Check queue
+```
+
+---
+
+## 🗑️ Uninstallation
+
+### Remove Single Installation
+```bash
+# Interactive - choose which installation to remove
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh)
+
+# Or specify directory number
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh) -d 1
+```
+
+### List All Installations
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh) -l
+```
+
+📖 **Details:** See [Uninstall Guide](modular/md_files/UNINSTALL_USAGE.md)
+
+---
+
+## 📚 Documentation
+
+- 📘 [Caddyfile Management](modular/md_files/CADDYFILE_MANAGEMENT.md) - Handle multiple domains
+- 🛡️ [Firewall & Network Guide](modular/md_files/FIREWALL_NETWORK_GUIDE.md) - UFW + BBR optimization
+- 🗑️ [Uninstall Guide](modular/md_files/UNINSTALL_USAGE.md) - Remove installations safely
+- 📝 [Project Structure](modular/md_files/PROJECT_STRUCTURE.md) - Code organization
+- ⚙️ [Setup Guide](modular/md_files/SETUP.md) - Detailed installation steps
+- 🚀 [VPS Optimization Notes](modular/md_files/VPS_Speed_Security_Optimization_Notes.md) - Performance tuning
 
 ---
 
 ## 🗂️ Directory Structure
 
-After running, you’ll have:
-
 ```
-3x-uiPANEL/
-├── compose.yml        # Docker Compose configuration
-├── db/                # 3X-UI configuration & database
-└── cert/              # Certificates for Caddy (if used)
+3x-ui-auto/
+├── one_liner.sh           # Standalone installer
+├── custom_logs.sh         # Installer with logging
+├── uninstall.sh          # Uninstaller with smart detection
+├── modular/              # Modular installer
+│   ├── install.sh        # Main entry point
+│   ├── functions/        # Function modules
+│   │   ├── logger.sh
+│   │   ├── docker.sh
+│   │   ├── caddy.sh
+│   │   ├── firewall.sh           # Smart UFW management
+│   │   ├── network_optimization.sh  # BBR + TCP tuning
+│   │   └── ...
+│   └── md_files/         # Documentation
+└── README.md             # This file
 ```
 
 ---
 
-## 🔍 Commands
+## ⚙️ Requirements
 
-| Action          | Command                   |
-| --------------- | ------------------------- |
-| Start panel     | `docker compose up -d`    |
-| Stop panel      | `docker compose down`     |
-| View logs       | `docker compose logs -f`  |
-| Restart service | `docker restart 3xui_app` |
+- **OS:** Ubuntu 20.04+ or Debian 10+
+- **Access:** Root or sudo privileges
+- **Network:** Internet connection
+- **Kernel:** 4.9+ (for BBR support)
 
 ---
 
-## 🧾 Requirements
+## 🔍 Troubleshooting
 
-* Ubuntu 20.04 or later
-* Root or `sudo` privileges
-* Internet connection (for downloading Docker & 3X-UI image)
-
----
-
-## ⚠️ Troubleshooting
-
-* **Docker group permissions**:
-  After installation, log out and back in to apply Docker group membership:
-
-  ```bash
-  newgrp docker
-  ```
-
-* **Port conflicts**:
-  Ensure that ports `2053`, `8443`, and `2087` are free.
-
-* **Caddy not starting?**
-  Check logs:
-
-  ```bash
-  sudo systemctl status caddy -l
-  ```
-
----
-
-## 💡 Example Usage
-
-### Install without a domain (⚠️not secure)
-
+### Docker Permission Issues
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/one_liner.sh)
-# -> Select "n" when asked about domain
+newgrp docker
+# Or logout and login again
 ```
 
-### Install with a domain and HTTPS (secure recommended)
-
+### Port Conflicts
+Check if ports are in use:
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/one_liner.sh)
-# -> Select "y" and provide your domain name
-# -> Choose to install Caddy for HTTPS
+sudo lsof -i :2053
+sudo lsof -i :443
 ```
-Then you can access your panel at:
+
+### Firewall Locked Out
+Access via VPS console and run:
+```bash
+sudo ufw disable
+# Or
+sudo ufw allow 22/tcp
 ```
-https://yourdomain.com/admin/
+
+### BBR Not Enabled
+Check kernel version:
+```bash
+uname -r  # Should be 4.9+
 ```
+
+For more troubleshooting, see the [documentation](#-documentation) section.
 
 ---
 
-## 🧰 Uninstallation
+## 💡 Tips
 
-To remove everything (including containers and configs):
+- ✅ **Use a domain** for HTTPS and better security
+- ✅ **Enable network optimization** for 20-30x faster speeds
+- ✅ **Configure firewall** for security
+- ✅ **Change default credentials** if not using Caddy
+- ✅ **Regular backups** of `~/3x-uiPANEL*/db/` directory
 
-```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh)
-```
 ---
 
-## 📑 Reading
-You can read the modularized code in [modular](https://github.com/YerdosNar/3x-ui-auto/tree/master/modular) directory.
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
+
+---
 
 ## 🧑‍💻 Author
 
@@ -175,9 +254,17 @@ You can read the modularized code in [modular](https://github.com/YerdosNar/3x-u
 
 ## 🪪 License
 
-This project is released under the [GPL-v3 License](LICENSE) (as the [3X-UI](https://github.com/MHSanaei/3x-ui) project)
+This project is released under the [GPL-v3 License](LICENSE)
+(Same as the [3X-UI](https://github.com/MHSanaei/3x-ui) project)
 
 ---
 
-> 💬 *Contributions, feedback, and pull requests are welcome!*
+## 📖 Related Projects
 
+- [3X-UI Panel](https://github.com/mhsanaei/3x-ui) - Original panel
+- [Caddy](https://caddyserver.com/) - Reverse proxy server
+- [Docker](https://www.docker.com/) - Container platform
+
+---
+
+> 💬 *Feedback and pull requests are welcome!*
