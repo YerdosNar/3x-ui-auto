@@ -167,12 +167,12 @@ caddy_install() {
 
     log_info "Installing Caddyfile..."
     echo "[CADDY] Installing Caddyfile to /etc/caddy/Caddyfile" >> "$LOG_FILE"
-    
+
     # Check if /etc/caddy/Caddyfile exists
     if [ -f /etc/caddy/Caddyfile ]; then
         log_info "Existing Caddyfile found at /etc/caddy/Caddyfile"
         echo "[CADDY] Existing Caddyfile detected" >> "$LOG_FILE"
-        
+
         # Check if domain already exists in Caddyfile
         if sudo grep -q "^$dom_name " /etc/caddy/Caddyfile || sudo grep -q "^$dom_name$" /etc/caddy/Caddyfile; then
             log_warn "Domain $dom_name already exists in Caddyfile!"
@@ -185,7 +185,7 @@ caddy_install() {
                 exec_silent "sudo cp /etc/caddy/Caddyfile $backup_file"
                 log_success "Backup created: $backup_file"
                 echo "[CADDY] Backup created: $backup_file" >> "$LOG_FILE"
-                
+
                 # Remove old configuration for this domain
                 log_info "Removing old configuration for $dom_name..."
                 echo "[CADDY] Removing old config for $dom_name" >> "$LOG_FILE"
@@ -193,7 +193,7 @@ caddy_install() {
                     BEGIN { skip=0; brace_count=0 }
                     $1 == domain && $2 == "{" { skip=1; brace_count=1; next }
                     skip && /{/ { brace_count++ }
-                    skip && /}/ { 
+                    skip && /}/ {
                         brace_count--
                         if (brace_count == 0) { skip=0 }
                         next
@@ -201,7 +201,7 @@ caddy_install() {
                     !skip { print }
                 ' /etc/caddy/Caddyfile > /tmp/Caddyfile.tmp 2>> "$LOG_FILE"
                 exec_silent "sudo mv /tmp/Caddyfile.tmp /etc/caddy/Caddyfile"
-                
+
                 # Append new configuration
                 log_info "Appending new configuration for $dom_name..."
                 echo "" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
@@ -218,13 +218,13 @@ caddy_install() {
             # Domain doesn't exist, safe to append
             log_info "Domain not found in existing Caddyfile, appending..."
             echo "[CADDY] Appending new domain config" >> "$LOG_FILE"
-            
+
             # Backup existing Caddyfile
             local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
             exec_silent "sudo cp /etc/caddy/Caddyfile $backup_file"
             log_success "Backup created: $backup_file"
             echo "[CADDY] Backup created: $backup_file" >> "$LOG_FILE"
-            
+
             # Append new configuration
             echo "" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
             echo "# 3X-UI Configuration for $dom_name - Added $(date)" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
@@ -250,7 +250,7 @@ caddy_install() {
         log_error "Caddy configuration validation failed!"
         log_error "Check the configuration at /etc/caddy/Caddyfile"
         echo "[CADDY] Validation failed" >> "$LOG_FILE"
-        
+
         # Check if backup exists
         if ls /etc/caddy/Caddyfile.backup.* 1> /dev/null 2>&1; then
             local latest_backup=$(ls -t /etc/caddy/Caddyfile.backup.* | head -1)
@@ -327,4 +327,6 @@ caddy_install() {
         sudo journalctl -u caddy -n 50 --no-pager >> "$LOG_FILE" 2>&1
         exit 1
     fi
+
+    return 0
 }

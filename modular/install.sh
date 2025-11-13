@@ -19,6 +19,8 @@ source "$FUNCTIONS_DIR/docker.sh"
 source "$FUNCTIONS_DIR/compose.sh"
 source "$FUNCTIONS_DIR/caddy.sh"
 source "$FUNCTIONS_DIR/panel.sh"
+source "$FUNCTIONS_DIR/firewall.sh"
+source "$FUNCTIONS_DIR/network_optimization.sh"
 
 # ───────────────────────────────
 # Cleanup on Exit
@@ -27,6 +29,7 @@ cleanup() {
     local exit_code=$?
     if [ $exit_code -ne 0 ]; then
         log_error "Installation failed! Check the errors above."
+        log_error "EXIT CODE: $exit_code"
         log_error "Full logs available at: $LOG_FILE"
     fi
 }
@@ -160,6 +163,30 @@ main() {
         log_warn "═══════════════════════════════════════════════════════════"
     fi
 
+    # Network Optimization
+    echo ""
+    echo -ne "${BLUE}Apply network optimizations (BBR, TCP tuning)? [Y/n]: ${NC}"
+    read APPLY_NETWORK_OPT
+    APPLY_NETWORK_OPT=${APPLY_NETWORK_OPT:-Y}
+
+    if [[ "$APPLY_NETWORK_OPT" =~ ^[Yy]$ ]]; then
+        network_optimization_setup
+    else
+        log_info "Skipping network optimization"
+    fi
+
+    # Firewall Setup
+    echo ""
+    echo -ne "${BLUE}Configure UFW firewall? [Y/n]: ${NC}"
+    read SETUP_FIREWALL
+    SETUP_FIREWALL=${SETUP_FIREWALL:-Y}
+
+    if [[ "$SETUP_FIREWALL" =~ ^[Yy]$ ]]; then
+        firewall_setup
+    else
+        log_info "Skipping firewall setup"
+    fi
+
     echo ""
     log_success "═══════════════════════════════════════════════════════════"
     log_success "           Installation completed successfully!"
@@ -180,6 +207,12 @@ main() {
     echo -e "  ${CYAN}docker compose up -d${NC}        # Start container"
     if command -v caddy &> /dev/null; then
         echo -e "  ${CYAN}sudo systemctl status caddy${NC} # Check Caddy status"
+    fi
+    if command -v ufw &> /dev/null; then
+        echo ""
+        echo -e "  ${CYAN}sudo ufw status${NC}             # Check firewall status"
+        echo -e "  ${CYAN}sudo ufw allow PORT/tcp${NC}     # Open a port"
+        echo -e "  ${CYAN}sudo ufw delete allow PORT${NC}  # Close a port"
     fi
     echo ""
 

@@ -53,11 +53,11 @@ oldsite.com {
 # 3X-UI Configuration for example.com - Added Wed Nov 13 10:30:00 UTC 2025
 example.com {
     encode gzip
-    
+
     tls {
         protocols tls1.3
     }
-    
+
     # ... your 3X-UI config
 }
 ```
@@ -78,7 +78,7 @@ example.com {
 [INFO] Existing Caddyfile found at /etc/caddy/Caddyfile
 [!]    Domain example.com already exists in Caddyfile!
 
-Overwrite existing configuration for example.com? [y/N]: 
+Overwrite existing configuration for example.com? [y/N]:
 ```
 
 #### Option A: You choose "Yes" (Overwrite)
@@ -324,13 +324,13 @@ ls -lah /etc/caddy/Caddyfile.backup.*
 
 ## Safety Features
 
-✅ **Automatic backups** before any modification  
-✅ **Domain conflict detection** to prevent overwrites  
-✅ **Configuration validation** before applying  
-✅ **User confirmation** for overwriting existing configs  
-✅ **Detailed logging** of all changes  
-✅ **Rollback instructions** if validation fails  
-✅ **Preserves existing configs** when appending  
+✅ **Automatic backups** before any modification
+✅ **Domain conflict detection** to prevent overwrites
+✅ **Configuration validation** before applying
+✅ **User confirmation** for overwriting existing configs
+✅ **Detailed logging** of all changes
+✅ **Rollback instructions** if validation fails
+✅ **Preserves existing configs** when appending
 
 ---
 
