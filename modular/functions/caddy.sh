@@ -166,7 +166,81 @@ caddy_install() {
     configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT"
 
     log_info "Installing Caddyfile..."
-    exec_silent "sudo cp $INSTALL_DIR/Caddyfile /etc/caddy/Caddyfile"
+    echo "[CADDY] Installing Caddyfile to /etc/caddy/Caddyfile" >> "$LOG_FILE"
+    
+    # Check if /etc/caddy/Caddyfile exists
+    if [ -f /etc/caddy/Caddyfile ]; then
+        log_info "Existing Caddyfile found at /etc/caddy/Caddyfile"
+        echo "[CADDY] Existing Caddyfile detected" >> "$LOG_FILE"
+        
+        # Check if domain already exists in Caddyfile
+        if sudo grep -q "^$dom_name " /etc/caddy/Caddyfile || sudo grep -q "^$dom_name$" /etc/caddy/Caddyfile; then
+            log_warn "Domain $dom_name already exists in Caddyfile!"
+            echo "[CADDY] Domain $dom_name already configured" >> "$LOG_FILE"
+            echo ""
+            read -p "Overwrite existing configuration for $dom_name? [y/N]: " OVERWRITE
+            if [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
+                # Backup existing Caddyfile
+                local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
+                exec_silent "sudo cp /etc/caddy/Caddyfile $backup_file"
+                log_success "Backup created: $backup_file"
+                echo "[CADDY] Backup created: $backup_file" >> "$LOG_FILE"
+                
+                # Remove old configuration for this domain
+                log_info "Removing old configuration for $dom_name..."
+                echo "[CADDY] Removing old config for $dom_name" >> "$LOG_FILE"
+                sudo awk -v domain="$dom_name" '
+                    BEGIN { skip=0; brace_count=0 }
+                    $1 == domain && $2 == "{" { skip=1; brace_count=1; next }
+                    skip && /{/ { brace_count++ }
+                    skip && /}/ { 
+                        brace_count--
+                        if (brace_count == 0) { skip=0 }
+                        next
+                    }
+                    !skip { print }
+                ' /etc/caddy/Caddyfile > /tmp/Caddyfile.tmp 2>> "$LOG_FILE"
+                exec_silent "sudo mv /tmp/Caddyfile.tmp /etc/caddy/Caddyfile"
+                
+                # Append new configuration
+                log_info "Appending new configuration for $dom_name..."
+                echo "" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
+                sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
+                log_success "Configuration for $dom_name appended to Caddyfile!"
+                echo "[CADDY] New config appended" >> "$LOG_FILE"
+            else
+                log_warn "Keeping existing configuration. New config saved to: $INSTALL_DIR/Caddyfile"
+                log_warn "You can manually merge configurations if needed."
+                echo "[CADDY] User chose to keep existing config" >> "$LOG_FILE"
+                return 1
+            fi
+        else
+            # Domain doesn't exist, safe to append
+            log_info "Domain not found in existing Caddyfile, appending..."
+            echo "[CADDY] Appending new domain config" >> "$LOG_FILE"
+            
+            # Backup existing Caddyfile
+            local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
+            exec_silent "sudo cp /etc/caddy/Caddyfile $backup_file"
+            log_success "Backup created: $backup_file"
+            echo "[CADDY] Backup created: $backup_file" >> "$LOG_FILE"
+            
+            # Append new configuration
+            echo "" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
+            echo "# 3X-UI Configuration for $dom_name - Added $(date)" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
+            sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a /etc/caddy/Caddyfile >> "$LOG_FILE"
+            log_success "Configuration appended to existing Caddyfile!"
+            echo "[CADDY] Config appended successfully" >> "$LOG_FILE"
+        fi
+    else
+        # No existing Caddyfile, create new one
+        log_info "No existing Caddyfile found, creating new one..."
+        echo "[CADDY] Creating new Caddyfile" >> "$LOG_FILE"
+        exec_silent "sudo mkdir -p /etc/caddy"
+        exec_silent "sudo cp $INSTALL_DIR/Caddyfile /etc/caddy/Caddyfile"
+        log_success "New Caddyfile created!"
+        echo "[CADDY] New Caddyfile created" >> "$LOG_FILE"
+    fi
 
     log_info "Testing Caddy configuration..."
     if sudo caddy validate --config /etc/caddy/Caddyfile >> "$LOG_FILE" 2>&1; then
@@ -174,7 +248,15 @@ caddy_install() {
         echo "[CADDY] Configuration validated" >> "$LOG_FILE"
     else
         log_error "Caddy configuration validation failed!"
+        log_error "Check the configuration at /etc/caddy/Caddyfile"
         echo "[CADDY] Validation failed" >> "$LOG_FILE"
+        
+        # Check if backup exists
+        if ls /etc/caddy/Caddyfile.backup.* 1> /dev/null 2>&1; then
+            local latest_backup=$(ls -t /etc/caddy/Caddyfile.backup.* | head -1)
+            log_warn "You can restore backup with: sudo cp $latest_backup /etc/caddy/Caddyfile"
+            echo "[CADDY] Backup available: $latest_backup" >> "$LOG_FILE"
+        fi
         exit 1
     fi
 
