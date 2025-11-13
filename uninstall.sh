@@ -37,7 +37,7 @@ readonly STATE_FILE="/tmp/.3xui_install_state"
 # ───────────────────────────────
 detect_install_dir() {
     local preselected="$1"
-    
+
     # First check if state file exists with saved directory
     if [ -f "$STATE_FILE" ] && grep -q "INSTALL_DIR=" "$STATE_FILE" 2>/dev/null; then
         local saved_dir=$(grep "INSTALL_DIR=" "$STATE_FILE" | cut -d= -f2)
@@ -73,7 +73,7 @@ detect_install_dir() {
                 return 1
             fi
         fi
-        
+
         # Interactive selection
         echo ""
         warn "Multiple 3X-UI installation directories found:"
@@ -165,7 +165,7 @@ confirm_uninstall() {
 # ───────────────────────────────
 remove_3xui() {
     local install_dir="$1"
-    
+
     info "Removing 3X-UI containers..."
 
     # If installation directory exists, try docker compose down first
@@ -205,12 +205,12 @@ remove_3xui() {
 # ───────────────────────────────
 remove_install_dir() {
     local install_dir="$1"
-    
+
     if [ -z "$install_dir" ]; then
         info "No installation directory detected, skipping..."
         return 0
     fi
-    
+
     if [ -d "$install_dir" ]; then
         info "Removing installation directory: $install_dir"
 
@@ -222,7 +222,7 @@ remove_install_dir() {
 
         read -p "Delete this directory and all its contents? [y/N]: " DELETE_DIR
         if [[ "$DELETE_DIR" =~ ^[Yy]$ ]]; then
-            rm -rf "$install_dir"
+            sudo rm -rf "$install_dir"
             success "Installation directory removed: $install_dir"
         else
             warn "Keeping installation directory at: $install_dir"
@@ -434,7 +434,7 @@ show_summary() {
             remains+=("Installation directory: $dir")
         fi
     done
-    
+
     [ -d /etc/caddy ] && remains+=("Caddy config: /etc/caddy")
     [ -d /var/lib/docker ] && remains+=("Docker data: /var/lib/docker")
 
@@ -546,7 +546,7 @@ EOF
 # ───────────────────────────────
 main() {
     local dir_selection=""
-    
+
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -569,7 +569,7 @@ main() {
                 ;;
         esac
     done
-    
+
     # Check if running as root
     if [ "$EUID" -eq 0 ]; then
         error "Do not run this script as root. Run as a regular user with sudo privileges."
@@ -593,7 +593,7 @@ main() {
     # Detect installation directory
     info "Detecting 3X-UI installation..."
     INSTALL_DIR=$(detect_install_dir "$dir_selection")
-    
+
     if [ -n "$INSTALL_DIR" ]; then
         success "Found installation directory: $INSTALL_DIR"
     else
