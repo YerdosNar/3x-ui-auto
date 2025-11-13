@@ -12,6 +12,7 @@ save_state() {
     local stage="$1"
     cat > "$STATE_FILE" <<EOF
 STAGE=$stage
+INSTALL_DIR=$INSTALL_DIR
 DOM_NAME=${DOM_NAME:-}
 ADMIN_NAME=${ADMIN_NAME:-}
 PASSWORD=${PASSWORD:-}

@@ -29,8 +29,71 @@ banner()  { echo -e "${CYAN}${BOLD}$1${NC}"; }
 # ───────────────────────────────
 # Installation paths
 # ───────────────────────────────
-readonly INSTALL_DIR="$HOME/3x-uiPANEL"
+readonly BASE_DIR="$HOME/3x-uiPANEL"
 readonly STATE_FILE="/tmp/.3xui_install_state"
+
+# ───────────────────────────────
+# Detect installation directory
+# ───────────────────────────────
+detect_install_dir() {
+    local preselected="$1"
+    
+    # First check if state file exists with saved directory
+    if [ -f "$STATE_FILE" ] && grep -q "INSTALL_DIR=" "$STATE_FILE" 2>/dev/null; then
+        local saved_dir=$(grep "INSTALL_DIR=" "$STATE_FILE" | cut -d= -f2)
+        if [ -d "$saved_dir" ]; then
+            echo "$saved_dir"
+            return 0
+        fi
+    fi
+
+    # Look for directories matching the pattern
+    local found_dirs=()
+    for dir in "$BASE_DIR"*; do
+        if [ -d "$dir" ]; then
+            found_dirs+=("$dir")
+        fi
+    done
+
+    if [ ${#found_dirs[@]} -eq 0 ]; then
+        echo ""
+        return 1
+    elif [ ${#found_dirs[@]} -eq 1 ]; then
+        echo "${found_dirs[0]}"
+        return 0
+    else
+        # Multiple directories found
+        # If preselected choice provided (from command line), use it
+        if [ -n "$preselected" ]; then
+            if [[ "$preselected" =~ ^[0-9]+$ ]] && [ "$preselected" -ge 1 ] && [ "$preselected" -le ${#found_dirs[@]} ]; then
+                echo "${found_dirs[$((preselected-1))]}"
+                return 0
+            else
+                error "Invalid directory selection: $preselected (must be 1-${#found_dirs[@]})"
+                return 1
+            fi
+        fi
+        
+        # Interactive selection
+        echo ""
+        warn "Multiple 3X-UI installation directories found:"
+        echo ""
+        local i=1
+        for dir in "${found_dirs[@]}"; do
+            echo "  $i) $dir"
+            ((i++))
+        done
+        echo ""
+        read -p "Select directory to uninstall [1-${#found_dirs[@]}]: " choice
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#found_dirs[@]} ]; then
+            echo "${found_dirs[$((choice-1))]}"
+            return 0
+        else
+            error "Invalid selection"
+            return 1
+        fi
+    fi
+}
 
 # ───────────────────────────────
 # Confirmation
@@ -101,55 +164,71 @@ confirm_uninstall() {
 # Stop and Remove 3X-UI Container
 # ───────────────────────────────
 remove_3xui() {
+    local install_dir="$1"
+    
     info "Removing 3X-UI containers..."
 
-    if [ -d "$INSTALL_DIR" ]; then
-        cd "$INSTALL_DIR"
+    # If installation directory exists, try docker compose down first
+    if [ -n "$install_dir" ] && [ -d "$install_dir" ]; then
+        cd "$install_dir"
 
         if [ -f "compose.yml" ] || [ -f "docker-compose.yml" ]; then
-            info "Stopping 3X-UI containers..."
+            info "Stopping 3X-UI containers using docker compose..."
             docker compose down -v 2>/dev/null || docker-compose down -v 2>/dev/null || true
-            success "3X-UI containers stopped and removed!"
+            success "3X-UI containers stopped via compose!"
         fi
     fi
 
-    # Force remove any remaining 3xui containers
-    if docker ps -a | grep -q "3xui"; then
-        info "Force removing any remaining 3X-UI containers..."
-        docker ps -a | grep "3xui" | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
+    # Force remove any remaining 3xui containers (including PID-based names)
+    # This will catch both 3xui_app and 3xui_app_* patterns
+    local containers=$(docker ps -a --filter "name=3xui" --format "{{.ID}}" 2>/dev/null || true)
+    if [ -n "$containers" ]; then
+        info "Force removing remaining 3X-UI containers..."
+        echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
+        success "Remaining 3X-UI containers removed!"
+    else
+        info "No 3X-UI containers found"
     fi
 
     # Remove 3X-UI images
     if docker images | grep -q "3x-ui"; then
         info "Removing 3X-UI images..."
         docker images | grep "3x-ui" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
+        success "3X-UI images removed!"
     fi
 
-    success "3X-UI containers and images removed!"
+    success "3X-UI containers and images cleanup completed!"
 }
 
 # ───────────────────────────────
 # Remove Installation Directory
 # ───────────────────────────────
 remove_install_dir() {
-    if [ -d "$INSTALL_DIR" ]; then
-        info "Removing installation directory: $INSTALL_DIR"
+    local install_dir="$1"
+    
+    if [ -z "$install_dir" ]; then
+        info "No installation directory detected, skipping..."
+        return 0
+    fi
+    
+    if [ -d "$install_dir" ]; then
+        info "Removing installation directory: $install_dir"
 
         # Show what will be deleted
         echo ""
         warn "Directory contents:"
-        ls -lah "$INSTALL_DIR" 2>/dev/null || true
+        ls -lah "$install_dir" 2>/dev/null || true
         echo ""
 
         read -p "Delete this directory and all its contents? [y/N]: " DELETE_DIR
         if [[ "$DELETE_DIR" =~ ^[Yy]$ ]]; then
-            sudo rm -rf "$INSTALL_DIR"
-            success "Installation directory removed!"
+            rm -rf "$install_dir"
+            success "Installation directory removed: $install_dir"
         else
-            warn "Keeping installation directory at: $INSTALL_DIR"
+            warn "Keeping installation directory at: $install_dir"
         fi
     else
-        info "Installation directory not found, skipping..."
+        info "Installation directory not found: $install_dir"
     fi
 }
 
@@ -349,7 +428,13 @@ show_summary() {
     # Check what remains
     local remains=()
 
-    [ -d "$INSTALL_DIR" ] && remains+=("Installation directory: $INSTALL_DIR")
+    # Check for any remaining 3x-uiPANEL directories
+    for dir in "$BASE_DIR"*; do
+        if [ -d "$dir" ]; then
+            remains+=("Installation directory: $dir")
+        fi
+    done
+    
     [ -d /etc/caddy ] && remains+=("Caddy config: /etc/caddy")
     [ -d /var/lib/docker ] && remains+=("Docker data: /var/lib/docker")
 
@@ -382,9 +467,109 @@ show_summary() {
 }
 
 # ───────────────────────────────
+# List Available Directories
+# ───────────────────────────────
+list_directories() {
+    local found_dirs=()
+    for dir in "$BASE_DIR"*; do
+        if [ -d "$dir" ]; then
+            found_dirs+=("$dir")
+        fi
+    done
+
+    if [ ${#found_dirs[@]} -eq 0 ]; then
+        echo "No 3X-UI installation directories found."
+        return 1
+    else
+        echo "Found ${#found_dirs[@]} 3X-UI installation director(y/ies):"
+        echo ""
+        local i=1
+        for dir in "${found_dirs[@]}"; do
+            echo "  $i) $dir"
+            # Show additional info if compose file exists
+            if [ -f "$dir/compose.yml" ]; then
+                local container_name=$(grep "container_name:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
+                local is_running=$(docker ps --filter "name=$container_name" --format "{{.Names}}" 2>/dev/null)
+                if [ -n "$is_running" ]; then
+                    echo "     Status: ${GREEN}Running${NC} (Container: $container_name)"
+                else
+                    echo "     Status: ${YELLOW}Stopped${NC} (Container: $container_name)"
+                fi
+            fi
+            ((i++))
+        done
+        echo ""
+        echo "Use -d NUM to select which directory to uninstall."
+        return 0
+    fi
+}
+
+# ───────────────────────────────
+# Show Usage
+# ───────────────────────────────
+show_usage() {
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+3X-UI Complete Uninstaller - Removes Docker, Caddy, and all related configurations
+
+OPTIONS:
+    -d, --dir NUM       Select directory number to uninstall (if multiple exist)
+    -l, --list          List all 3X-UI installation directories and exit
+    -h, --help          Show this help message
+
+EXAMPLES:
+    # Interactive mode (will prompt for selections)
+    bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh)
+
+    # List available installations
+    bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh) -l
+
+    # Specify directory selection (useful for automation)
+    bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh) -d 1
+
+    # Local execution
+    ./uninstall.sh -l
+    ./uninstall.sh -d 2
+
+NOTES:
+    - If multiple 3x-uiPANEL directories exist, you'll be prompted to choose
+    - Use -d option to preselect which directory to remove (avoids prompts)
+    - Use -l option to see all installations without running uninstall
+    - The script will still ask for confirmation before deleting
+
+EOF
+}
+
+# ───────────────────────────────
 # Main Uninstallation
 # ───────────────────────────────
 main() {
+    local dir_selection=""
+    
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--dir)
+                dir_selection="$2"
+                shift 2
+                ;;
+            -l|--list)
+                list_directories
+                exit $?
+                ;;
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                error "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+        esac
+    done
+    
     # Check if running as root
     if [ "$EUID" -eq 0 ]; then
         error "Do not run this script as root. Run as a regular user with sudo privileges."
@@ -405,8 +590,20 @@ main() {
     banner "═══════════════════════════════════════════════════════════"
     echo ""
 
+    # Detect installation directory
+    info "Detecting 3X-UI installation..."
+    INSTALL_DIR=$(detect_install_dir "$dir_selection")
+    
+    if [ -n "$INSTALL_DIR" ]; then
+        success "Found installation directory: $INSTALL_DIR"
+    else
+        warn "No installation directory detected"
+        warn "Will attempt to remove any 3X-UI Docker containers anyway"
+    fi
+    echo ""
+
     # Remove in reverse order of installation
-    remove_3xui
+    remove_3xui "$INSTALL_DIR"
     echo ""
 
     remove_caddy
@@ -415,7 +612,7 @@ main() {
     remove_docker
     echo ""
 
-    remove_install_dir
+    remove_install_dir "$INSTALL_DIR"
     echo ""
 
     remove_state
