@@ -408,7 +408,7 @@ show_summary() {
 # ───────────────────────────────
 detect_install_dir() {
     local preselected="$1"
-    
+
     # First check if state file exists with saved directory
     if [ -f "$STATE_FILE" ] && grep -q "INSTALL_DIR=" "$STATE_FILE" 2>/dev/null; then
         local saved_dir=$(grep "INSTALL_DIR=" "$STATE_FILE" | cut -d= -f2)
@@ -444,7 +444,7 @@ detect_install_dir() {
                 return 1
             fi
         fi
-        
+
         # Interactive selection
         echo ""
         warn "Multiple 3X-UI installation directories found:"
@@ -484,62 +484,62 @@ get_all_dirs() {
 # ───────────────────────────────
 remove_caddy_config() {
     local install_dir="$1"
-    
+
     if [ ! -f "$install_dir/Caddyfile" ]; then
         info "No Caddyfile found in installation directory"
         return 0
     fi
-    
+
     # Extract domain from Caddyfile
     local domain=$(head -1 "$install_dir/Caddyfile" | awk '{print $1}')
-    
+
     if [ -z "$domain" ]; then
         warn "Could not detect domain from Caddyfile"
         return 0
     fi
-    
+
     info "Checking Caddy configuration for domain: $domain"
-    
+
     if [ ! -f /etc/caddy/Caddyfile ]; then
         info "No system Caddyfile found"
         return 0
     fi
-    
+
     # Check if domain exists in system Caddyfile
     if ! sudo grep -q "^$domain " /etc/caddy/Caddyfile 2>/dev/null && \
        ! sudo grep -q "^$domain$" /etc/caddy/Caddyfile 2>/dev/null; then
         info "Domain $domain not found in system Caddyfile"
         return 0
     fi
-    
+
     info "Removing $domain configuration from Caddyfile..."
-    
+
     # Backup Caddyfile
     sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.backup.$(date +%s)
     success "Backup created"
-    
+
     # Remove the domain block
     sudo awk -v domain="$domain" '
         BEGIN { skip=0; brace_count=0 }
         $1 == domain && $2 == "{" { skip=1; brace_count=1; next }
         skip && /{/ { brace_count++ }
-        skip && /}/ { 
+        skip && /}/ {
             brace_count--
             if (brace_count == 0) { skip=0 }
             next
         }
         !skip { print }
     ' /etc/caddy/Caddyfile > /tmp/Caddyfile.tmp
-    
+
     sudo mv /tmp/Caddyfile.tmp /etc/caddy/Caddyfile
-    
+
     # Reload Caddy if it's running
     if systemctl is-active --quiet caddy 2>/dev/null; then
         info "Reloading Caddy configuration..."
         sudo systemctl reload caddy 2>/dev/null || true
         success "Caddy configuration reloaded"
     fi
-    
+
     success "Removed $domain from Caddyfile"
 }
 
@@ -564,14 +564,14 @@ list_directories() {
             local is_running=$(docker ps --filter "name=$container_name" --format "{{.Names}}" 2>/dev/null)
             local has_dom_name=$(grep "hostname:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
             if [ -n $is_running ]; then
-                echo "     Status: ${GREEN}Running${NC} (Container: ${BLUE}$container_name${NC})"
-                echo "     Domain: ${CYAN}$has_dom_name${NC}"
+                echo -e "     Status: ${GREEN}Running${NC} (Container: ${BLUE}$container_name${NC})\n"
+                echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
             else
-                echo "     Status: ${YELLOW}Stopped${NC} (Container: ${BLUE}$container_name${NC})"
-                echo "     Domain: ${CYAN}$has_dom_name${NC}"
+                echo -e "     Status: ${YELLOW}Stopped${NC} (Container: ${BLUE}$container_name${NC})\n"
+                echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
             fi
         fi
-    else
+l   else
         echo "Found ${#found_dirs[@]} 3X-UI installation directories:"
         echo ""
         local i=1
@@ -581,10 +581,13 @@ list_directories() {
             if [ -f "$dir/compose.yml" ]; then
                 local container_name=$(grep "container_name:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
                 local is_running=$(docker ps --filter "name=$container_name" --format "{{.Names}}" 2>/dev/null)
+                local has_dom_name=$(grep "hostname:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
                 if [ -n "$is_running" ]; then
-                    echo "     Status: ${GREEN}Running${NC} (Container: $container_name)"
+                    echo -e "     Status: ${GREEN}Running${NC} (Container: $container_name)\n"
+                    echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
                 else
-                    echo "     Status: ${YELLOW}Stopped${NC} (Container: $container_name)"
+                    echo -e "     Status: ${YELLOW}Stopped${NC} (Container: $container_name)\n"
+                    echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
                 fi
             fi
             ((i++))
@@ -600,23 +603,23 @@ list_directories() {
 # ───────────────────────────────
 remove_single_installation() {
     local install_dir="$1"
-    
+
     info "Removing single 3X-UI installation: $install_dir"
     echo ""
-    
+
     # Remove container
     remove_3xui "$install_dir"
     echo ""
-    
+
     # Remove Caddy config (if exists)
     if command -v caddy &> /dev/null; then
         remove_caddy_config "$install_dir"
         echo ""
     fi
-    
+
     # Remove directory
     remove_install_dir "$install_dir"
-    
+
     success "Installation removed successfully!"
 }
 
@@ -626,32 +629,32 @@ remove_single_installation() {
 remove_all_installations() {
     info "Removing ALL 3X-UI installations..."
     echo ""
-    
+
     local dirs=($(get_all_dirs))
-    
+
     if [ ${#dirs[@]} -eq 0 ]; then
         warn "No 3X-UI installations found"
         return 0
     fi
-    
+
     info "Found ${#dirs[@]} installation(s)"
     for dir in "${dirs[@]}"; do
         echo "  • $dir"
     done
     echo ""
-    
+
     read -p "Remove all these installations? [y/N]: " CONFIRM_ALL
     if [[ ! "$CONFIRM_ALL" =~ ^[Yy]$ ]]; then
         info "Operation cancelled"
         return 0
     fi
-    
+
     for dir in "${dirs[@]}"; do
         echo ""
         banner "Removing: $dir"
         remove_single_installation "$dir"
     done
-    
+
     echo ""
     success "All 3X-UI installations removed!"
     info "Docker and Caddy were preserved"
@@ -662,16 +665,16 @@ remove_all_installations() {
 # ───────────────────────────────
 purge_everything() {
     confirm_uninstall
-    
+
     echo ""
     banner "═══════════════════════════════════════════════════════════"
     banner "Starting Complete Purge..."
     banner "═══════════════════════════════════════════════════════════"
     echo ""
-    
+
     # Get all dirs
     local dirs=($(get_all_dirs))
-    
+
     # Remove all 3X-UI installations
     if [ ${#dirs[@]} -gt 0 ]; then
         info "Removing ${#dirs[@]} 3X-UI installation(s)..."
@@ -681,22 +684,22 @@ purge_everything() {
         done
         echo ""
     fi
-    
+
     # Remove Caddy completely
     remove_caddy
     echo ""
-    
+
     # Remove Docker completely
     remove_docker
     echo ""
-    
+
     # Remove state
     remove_state
     echo ""
-    
+
     # Cleanup
     cleanup_system
-    
+
     show_summary
 }
 
@@ -808,15 +811,15 @@ main() {
             # Detect specific directory
             info "Detecting 3X-UI installation..."
             INSTALL_DIR=$(detect_install_dir "$dir_selection")
-            
+
             if [ -z "$INSTALL_DIR" ]; then
                 error "No installation directory found"
                 exit 1
             fi
-            
+
             success "Found installation directory: $INSTALL_DIR"
             echo ""
-            
+
             remove_single_installation "$INSTALL_DIR"
             exit 0
             ;;
