@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# set -euo pipefail
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 3X-UI Complete Uninstaller
@@ -110,29 +110,16 @@ remove_3xui() {
         cd "$install_dir"
 
         if [ -f "compose.yml" ] || [ -f "docker-compose.yml" ]; then
+            local docker_name=$(grep "container_name:" "*compose.yml" 2>/dev/null | awk '{print $2}' | tr -d "'\"")
             info "Stopping 3X-UI containers using docker compose..."
             docker compose down -v 2>/dev/null || docker-compose down -v 2>/dev/null || true
+            docker rm "$docker_name" 2>/dev/null
             success "3X-UI containers stopped via compose!"
         fi
     fi
 
     # Force remove any remaining 3xui containers (including PID-based names)
     # This will catch both 3xui_app and 3xui_app_* patterns
-    local containers=$(docker ps -a --filter "name=3xui" --format "{{.ID}}" 2>/dev/null || true)
-    if [ -n "$containers" ]; then
-        info "Force removing remaining 3X-UI containers..."
-        echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
-        success "Remaining 3X-UI containers removed!"
-    else
-        info "No 3X-UI containers found"
-    fi
-
-    # Remove 3X-UI images
-    if docker images | grep -q "3x-ui"; then
-        info "Removing 3X-UI images..."
-        docker images | grep "3x-ui" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
-        success "3X-UI images removed!"
-    fi
 
     success "3X-UI containers and images cleanup completed!"
 }
@@ -483,64 +470,67 @@ get_all_dirs() {
 # Remove Caddyfile configuration for specific domain
 # ───────────────────────────────
 remove_caddy_config() {
-    local install_dir="$1"
-
-    if [ ! -f "$install_dir/Caddyfile" ]; then
-        info "No Caddyfile found in installation directory"
+    local dom_name=""
+    if [ -d "$1" ]; then
+        dom_name=$(grep "hostname:" "$1/compose.yml" 2>/dev/null | awk '{print $2}' | tr -d " ")
+        if [ -n "$dom_name" ]; then
+            info "Domain Name: $dom_name"
+        else
+            warn "No domain name found in compose.yml"
+            return 0
+        fi
+    else
+        warn "Installation directory not found"
         return 0
     fi
 
-    # Extract domain from Caddyfile
-    local domain=$(head -1 "$install_dir/Caddyfile" | awk '{print $1}')
+    local caddyfile="/etc/caddy/Caddyfile"
 
-    if [ -z "$domain" ]; then
-        warn "Could not detect domain from Caddyfile"
+    # Check if Caddyfile exists
+    if [ ! -f "$caddyfile" ]; then
+        warn "Caddyfile not found at $caddyfile"
         return 0
     fi
 
-    info "Checking Caddy configuration for domain: $domain"
-
-    if [ ! -f /etc/caddy/Caddyfile ]; then
-        info "No system Caddyfile found"
+    if ! grep -E "^$dom_name( |\{)" "$caddyfile" >/dev/null 2>&1; then
+        info "Configuration for ${BLUE}$dom_name${NC} not found in Caddyfile"
+        echo "[WARNING] Configuration for ${BLUE}$dom_name${NC} not found in Caddyfile"
         return 0
     fi
 
-    # Check if domain exists in system Caddyfile
-    if ! sudo grep -q "^$domain " /etc/caddy/Caddyfile 2>/dev/null && \
-       ! sudo grep -q "^$domain$" /etc/caddy/Caddyfile 2>/dev/null; then
-        info "Domain $domain not found in system Caddyfile"
-        return 0
-    fi
+    awk -v dom="$dom_name" '
+        $1 == dom {
+            skip = 1
+            brace = 0
 
-    info "Removing $domain configuration from Caddyfile..."
+            if ($0 ~ /\{/) brace++
 
-    # Backup Caddyfile
-    sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.backup.$(date +%s)
-    success "Backup created"
-
-    # Remove the domain block
-    sudo awk -v domain="$domain" '
-        BEGIN { skip=0; brace_count=0 }
-        $1 == domain && $2 == "{" { skip=1; brace_count=1; next }
-        skip && /{/ { brace_count++ }
-        skip && /}/ {
-            brace_count--
-            if (brace_count == 0) { skip=0 }
             next
         }
-        !skip { print }
-    ' /etc/caddy/Caddyfile > /tmp/Caddyfile.tmp
 
-    sudo mv /tmp/Caddyfile.tmp /etc/caddy/Caddyfile
+        skip {
+            if ($0 ~ /\{/) brace++
+            if ($0 ~ /\}/) brace--
 
-    # Reload Caddy if it's running
+            if (brace == 0) {
+                skip = 0
+            }
+
+            next
+        }
+
+        { print }
+    ' "$caddyfile" | sudo tee "$caddyfile.tmp" >/dev/null
+
+    sudo mv "$caddyfile.tmp" "$caddyfile"
+    
+    # Reload Caddy to apply changes
     if systemctl is-active --quiet caddy 2>/dev/null; then
-        info "Reloading Caddy configuration..."
+        info "Reloading Caddy service..."
         sudo systemctl reload caddy 2>/dev/null || true
-        success "Caddy configuration reloaded"
     fi
-
-    success "Removed $domain from Caddyfile"
+    
+    success "Removed configuration from Caddyfile"
 }
 
 # ───────────────────────────────
@@ -559,19 +549,22 @@ list_directories() {
         return 1
     elif [ ${#found_dirs[@]} -eq 1 ]; then
         echo "Found ${#found_dirs[@]} 3X-UI installation directory:"
-        if [ -f "$dir/compose.yml" ]; then
-            local container_name=$(grep "container_name:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
+        echo ""
+        echo "  1) ${found_dirs[0]}"
+        if [ -f "${found_dirs[0]}/compose.yml" ]; then
+            local container_name=$(grep "container_name:" "${found_dirs[0]}/compose.yml" 2>/dev/null | awk '{print $2}' | tr -d "'\"")
             local is_running=$(docker ps --filter "name=$container_name" --format "{{.Names}}" 2>/dev/null)
-            local has_dom_name=$(grep "hostname:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
-            if [ -n $is_running ]; then
-                echo -e "     Status: ${GREEN}Running${NC} (Container: ${BLUE}$container_name${NC})\n"
-                echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
+            local has_dom_name=$(grep "hostname:" "${found_dirs[0]}/compose.yml" 2>/dev/null | awk '{print $2}' | tr -d "'\"")
+            if [ -n "$is_running" ]; then
+                echo -e "     Status: ${GREEN}Running${NC} (Container: ${BLUE}$container_name${NC})"
+                echo -e "     Domain: ${CYAN}$has_dom_name${NC}"
             else
-                echo -e "     Status: ${YELLOW}Stopped${NC} (Container: ${BLUE}$container_name${NC})\n"
-                echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
+                echo -e "     Status: ${YELLOW}Stopped${NC} (Container: ${BLUE}$container_name${NC})"
+                echo -e "     Domain: ${CYAN}$has_dom_name${NC}"
             fi
         fi
-l   else
+        echo ""
+    else
         echo "Found ${#found_dirs[@]} 3X-UI installation directories:"
         echo ""
         local i=1
@@ -579,20 +572,20 @@ l   else
             echo "  $i) $dir"
             # Show additional info if compose file exists
             if [ -f "$dir/compose.yml" ]; then
-                local container_name=$(grep "container_name:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
+                local container_name=$(grep "container_name:" "$dir/compose.yml" 2>/dev/null | awk '{print $2}' | tr -d "'\"")
                 local is_running=$(docker ps --filter "name=$container_name" --format "{{.Names}}" 2>/dev/null)
-                local has_dom_name=$(grep "hostname:" "$dir/compose.yml" | awk '{print $2}' | tr -d "'\"")
+                local has_dom_name=$(grep "hostname:" "$dir/compose.yml" 2>/dev/null | awk '{print $2}' | tr -d "'\"")
                 if [ -n "$is_running" ]; then
-                    echo -e "     Status: ${GREEN}Running${NC} (Container: $container_name)\n"
-                    echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
+                    echo -e "     Status: ${GREEN}Running${NC} (Container: $container_name)"
+                    echo -e "     Domain: ${CYAN}$has_dom_name${NC}"
                 else
-                    echo -e "     Status: ${YELLOW}Stopped${NC} (Container: $container_name)\n"
-                    echo -e "     Domain: ${CYAN}$has_dom_name${NC}\n"
+                    echo -e "     Status: ${YELLOW}Stopped${NC} (Container: $container_name)"
+                    echo -e "     Domain: ${CYAN}$has_dom_name${NC}"
                 fi
             fi
+            echo ""
             ((i++))
         done
-        echo ""
         echo "Use -d NUM to select which directory to uninstall."
         return 0
     fi
