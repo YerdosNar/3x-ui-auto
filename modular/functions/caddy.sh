@@ -11,14 +11,55 @@ configure_caddy() {
     local hash_pw="$4"
     local port="$5"
     local be_port="$6"
+    local redirect_port="$7"
+
+    local caddy_filename="/etc/caddy/Caddyfile"
 
     log_info "Creating Caddyfile configuration..."
     echo "[CADDY] Creating Caddyfile" >> "$LOG_FILE"
     echo "[CADDY] Domain: $dom_name, Route: /$route" >> "$LOG_FILE"
     echo "[CADDY] API Port: $port, Backend Port: $be_port" >> "$LOG_FILE"
 
+    read -r -d '' caddy_header << 'EOF'
+{
+    servers {
+        listener_wrappers {
+            proxy_protocol {
+                timeout 2s
+                allow 127.0.0.1/8
+            }
+        }
+    }
+}
+EOF
+    if [ -f "$caddy_filename" ]; then
+        log_success "$caddy_filename exists"
+        echo "[CADDY] Found $caddy_filename" >> "$LOG_FILE"
+        log_info "Looking for the header"
+        echo "[CADDY] Looking for the header" >> "$LOG_FILE"
+
+        caddyfile_content=$(<"$caddy_filename")
+        if [[ "$caddyfile_content" != *"$caddy_header"* ]]; then
+            temp_caddyfile=$(mktemp)
+            printf "%s\n" "$caddy_header" > "$temp_caddyfile"
+            cat "$caddy_filename" >> "$temp_caddyfile"
+            mv "$temp_caddyfile" "$caddy_filename"
+            log_success "Caddy header written"
+            echo "Caddy header written" >> "$LOG_FILE"
+        else
+            log_success "Caddy header found"
+            echo "[CADDY] Caddy header found" >> "$LOG_FILE"
+        fi
+    else
+        log_info "$caddy_filename not found, creating new one"
+        echo "[CADDY] $caddy_filename not found, creating new one" >> "$LOG_FILE"
+        printf "%s\n" "$caddy_header" > "$caddy_filename"
+        log_success "Caddy header written"
+        echo "Caddy header written" >> "$LOG_FILE"
+    fi
+
     cat > "$INSTALL_DIR/Caddyfile" <<EOF
-$dom_name {
+$dom_name:$redirect_port {
     encode gzip
 
     tls {
@@ -163,7 +204,16 @@ caddy_install() {
         fi
     done
 
-    configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT"
+    while true; do
+        read -p "Enter port for Caddy [default: $(($PORT-1))]: " REDIRECT_PORT
+        REDIRECT_PORT=${REDIRECT_PORT:-$(($PORT-1))}
+        if validate_port "$REDIRECT_PORT" && check_port_available "$REDIRECT_PORT"; then
+            echo "[CADDY] Caddy port: $REDIRECT_PORT" >> "$LOG_FILE"
+            break
+        fi
+    done
+
+    configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT" "$REDIRECT_PORT"
 
     log_info "Installing Caddyfile..."
     echo "[CADDY] Installing Caddyfile to /etc/caddy/Caddyfile" >> "$LOG_FILE"
