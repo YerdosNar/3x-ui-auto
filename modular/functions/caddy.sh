@@ -69,21 +69,39 @@ $dom_name:$redirect_port {
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options nosniff
-        X-Frame-Options SAMEORIGIN
+        X-Frame-Options DENY
         Referrer-Policy strict-origin-when-cross-origin
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
         -Server
         -X-Powered-By
+    }
+
+    # Rate limiting
+    rate_limit {
+        zone dynamic {
+            key {remote_host}
+            events 100
+            window 1m
+        }
     }
 
     route /$route* {
         basic_auth {
             $admin_name $hash_pw
         }
-        reverse_proxy localhost:$be_port
+        reverse_proxy localhost:$be_port {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     route /api/v1* {
-        reverse_proxy localhost:$port
+        reverse_proxy localhost:$port {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     route {
@@ -223,8 +241,8 @@ caddy_install() {
         log_info "Existing Caddyfile found at /etc/caddy/Caddyfile"
         echo "[CADDY] Existing Caddyfile detected" >> "$LOG_FILE"
 
-        # Check if domain already exists in Caddyfile
-        if sudo grep -q "^$dom_name " /etc/caddy/Caddyfile || sudo grep -q "^$dom_name$" /etc/caddy/Caddyfile; then
+        # Check if domain already exists in Caddyfile (with or without port)
+        if sudo grep -qE "^$dom_name(:|[[:space:]]|\{|$)" /etc/caddy/Caddyfile; then
             log_warn "Domain $dom_name already exists in Caddyfile!"
             echo "[CADDY] Domain $dom_name already configured" >> "$LOG_FILE"
             echo ""
@@ -241,16 +259,39 @@ caddy_install() {
                 echo "[CADDY] Removing old config for $dom_name" >> "$LOG_FILE"
                 sudo awk -v domain="$dom_name" '
                     BEGIN { skip=0; brace_count=0 }
-                    $1 == domain && $2 == "{" { skip=1; brace_count=1; next }
-                    skip && /{/ { brace_count++ }
-                    skip && /}/ {
-                        brace_count--
-                        if (brace_count == 0) { skip=0 }
+                    
+                    # Match domain with or without port/brace on same line
+                    $1 == domain || $1 ~ "^" domain ":" || $1 ~ "^" domain "{" {
+                        skip=1
+                        # Count braces on the same line
+                        for (i=1; i<=NF; i++) {
+                            if ($i ~ /{/) brace_count++
+                            if ($i ~ /}/) brace_count--
+                        }
+                        if (brace_count == 0) skip=0
                         next
                     }
+                    
+                    skip {
+                        # Count all braces in the line
+                        for (i=1; i<=NF; i++) {
+                            if ($i ~ /{/) brace_count++
+                            if ($i ~ /}/) brace_count--
+                        }
+                        if (brace_count == 0) skip=0
+                        next
+                    }
+                    
                     !skip { print }
                 ' /etc/caddy/Caddyfile > /tmp/Caddyfile.tmp 2>> "$LOG_FILE"
-                exec_silent "sudo mv /tmp/Caddyfile.tmp /etc/caddy/Caddyfile"
+                
+                if [ -s /tmp/Caddyfile.tmp ]; then
+                    exec_silent "sudo mv /tmp/Caddyfile.tmp /etc/caddy/Caddyfile"
+                else
+                    log_error "Failed to remove old configuration - backup preserved"
+                    sudo rm -f /tmp/Caddyfile.tmp
+                    return 1
+                fi
 
                 # Append new configuration
                 log_info "Appending new configuration for $dom_name..."
@@ -300,20 +341,49 @@ caddy_install() {
         log_error "Caddy configuration validation failed!"
         log_error "Check the configuration at /etc/caddy/Caddyfile"
         echo "[CADDY] Validation failed" >> "$LOG_FILE"
+        
+        # Show validation errors
+        echo ""
+        log_warn "Validation errors:"
+        sudo caddy fmt --overwrite /etc/caddy/Caddyfile >> "$LOG_FILE" 2>&1
+        sudo caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -20
 
-        # Check if backup exists
+        # Check if backup exists and offer auto-restore
         if ls /etc/caddy/Caddyfile.backup.* 1> /dev/null 2>&1; then
             local latest_backup=$(ls -t /etc/caddy/Caddyfile.backup.* | head -1)
-            log_warn "You can restore backup with: sudo cp $latest_backup /etc/caddy/Caddyfile"
-            echo "[CADDY] Backup available: $latest_backup" >> "$LOG_FILE"
+            echo ""
+            read -p "Restore from backup? [Y/n]: " RESTORE_BACKUP
+            RESTORE_BACKUP=${RESTORE_BACKUP:-Y}
+            if [[ "$RESTORE_BACKUP" =~ ^[Yy]$ ]]; then
+                exec_silent "sudo cp $latest_backup /etc/caddy/Caddyfile"
+                log_success "Backup restored: $latest_backup"
+                echo "[CADDY] Backup restored" >> "$LOG_FILE"
+                return 1
+            else
+                log_warn "Manual restoration command: sudo cp $latest_backup /etc/caddy/Caddyfile"
+                echo "[CADDY] Backup available: $latest_backup" >> "$LOG_FILE"
+            fi
         fi
         exit 1
     fi
 
-    log_info "Starting Caddy service..."
-    exec_silent "sudo systemctl enable --now caddy"
+    log_info "Reloading Caddy service..."
+    
+    # If Caddy is already running, reload it; otherwise start it
+    if systemctl is-active --quiet caddy; then
+        if sudo systemctl reload caddy >> "$LOG_FILE" 2>&1; then
+            log_success "Caddy reloaded successfully!"
+            echo "[CADDY] Service reloaded" >> "$LOG_FILE"
+        else
+            log_warn "Reload failed, attempting restart..."
+            exec_silent "sudo systemctl restart caddy"
+        fi
+    else
+        log_info "Starting Caddy service..."
+        exec_silent "sudo systemctl enable --now caddy"
+    fi
 
-    # Wait for Caddy to start
+    # Wait for Caddy to start/reload
     sleep 2
 
     if systemctl is-active --quiet caddy; then
@@ -329,7 +399,7 @@ caddy_install() {
             log_banner "═══════════════════════════════════════════════════════════"
             log_banner "    ✓ 3X-UI Panel Configured Automatically!"
             log_banner "═══════════════════════════════════════════════════════════"
-            echo -e "${GREEN}Panel URL:${NC}      https://$dom_name/$ROUTE"
+            echo -e "${GREEN}Panel URL:${NC}      https://$dom_name:$REDIRECT_PORT/$ROUTE"
             echo -e "${GREEN}Admin User:${NC}     $ADMIN_NAME"
             echo -e "${GREEN}Password:${NC}       $PASSWORD"
             echo -e "${GREEN}API Endpoint:${NC}   https://$dom_name/api/v1"
