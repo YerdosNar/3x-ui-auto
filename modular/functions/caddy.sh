@@ -38,12 +38,12 @@ EOF
         log_info "Looking for the header"
         echo "[CADDY] Looking for the header" >> "$LOG_FILE"
 
-        caddyfile_content=$(<"$caddy_filename")
-        if [[ "$caddyfile_content" != *"$caddy_header"* ]]; then
+        # Check for proxy_protocol instead of exact header match (more reliable)
+        if ! sudo grep -q "proxy_protocol" "$caddy_filename" 2>/dev/null; then
             temp_caddyfile=$(mktemp)
             printf "%s\n" "$caddy_header" > "$temp_caddyfile"
-            cat "$caddy_filename" >> "$temp_caddyfile"
-            mv "$temp_caddyfile" "$caddy_filename"
+            sudo cat "$caddy_filename" >> "$temp_caddyfile"
+            sudo mv "$temp_caddyfile" "$caddy_filename"
             log_success "Caddy header written"
             echo "Caddy header written" >> "$LOG_FILE"
         else
@@ -53,7 +53,7 @@ EOF
     else
         log_info "$caddy_filename not found, creating new one"
         echo "[CADDY] $caddy_filename not found, creating new one" >> "$LOG_FILE"
-        printf "%s\n" "$caddy_header" > "$caddy_filename"
+        printf "%s\n" "$caddy_header" | sudo tee "$caddy_filename" > /dev/null
         log_success "Caddy header written"
         echo "Caddy header written" >> "$LOG_FILE"
     fi
@@ -69,39 +69,21 @@ $dom_name:$redirect_port {
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options nosniff
-        X-Frame-Options DENY
+        X-Frame-Options SAMEORIGIN
         Referrer-Policy strict-origin-when-cross-origin
-        Permissions-Policy "geolocation=(), microphone=(), camera=()"
         -Server
         -X-Powered-By
-    }
-
-    # Rate limiting
-    rate_limit {
-        zone dynamic {
-            key {remote_host}
-            events 100
-            window 1m
-        }
     }
 
     route /$route* {
         basic_auth {
             $admin_name $hash_pw
         }
-        reverse_proxy localhost:$be_port {
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
+        reverse_proxy localhost:$be_port
     }
 
     route /api/v1* {
-        reverse_proxy localhost:$port {
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
+        reverse_proxy localhost:$port
     }
 
     route {
@@ -259,7 +241,7 @@ caddy_install() {
                 echo "[CADDY] Removing old config for $dom_name" >> "$LOG_FILE"
                 sudo awk -v domain="$dom_name" '
                     BEGIN { skip=0; brace_count=0 }
-                    
+
                     # Match domain with or without port/brace on same line
                     $1 == domain || $1 ~ "^" domain ":" || $1 ~ "^" domain "{" {
                         skip=1
@@ -271,7 +253,7 @@ caddy_install() {
                         if (brace_count == 0) skip=0
                         next
                     }
-                    
+
                     skip {
                         # Count all braces in the line
                         for (i=1; i<=NF; i++) {
@@ -281,10 +263,10 @@ caddy_install() {
                         if (brace_count == 0) skip=0
                         next
                     }
-                    
+
                     !skip { print }
                 ' /etc/caddy/Caddyfile > /tmp/Caddyfile.tmp 2>> "$LOG_FILE"
-                
+
                 if [ -s /tmp/Caddyfile.tmp ]; then
                     exec_silent "sudo mv /tmp/Caddyfile.tmp /etc/caddy/Caddyfile"
                 else
@@ -341,7 +323,7 @@ caddy_install() {
         log_error "Caddy configuration validation failed!"
         log_error "Check the configuration at /etc/caddy/Caddyfile"
         echo "[CADDY] Validation failed" >> "$LOG_FILE"
-        
+
         # Show validation errors
         echo ""
         log_warn "Validation errors:"
@@ -368,7 +350,7 @@ caddy_install() {
     fi
 
     log_info "Reloading Caddy service..."
-    
+
     # If Caddy is already running, reload it; otherwise start it
     if systemctl is-active --quiet caddy; then
         if sudo systemctl reload caddy >> "$LOG_FILE" 2>&1; then
