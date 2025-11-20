@@ -680,8 +680,9 @@ caddy_install() {
 # ───────────────────────────────
 main() {
     clear
+    panel_version=$(grep "LATEST" ./VERSION | awk '{print $2}' | tr -d ' ')
     banner "═══════════════════════════════════════════════════════════"
-    banner "           3X-UI Automated Installer v2.0"
+    banner "           3X-UI Automated Installer v$panel_version"
     banner "═══════════════════════════════════════════════════════════"
     echo ""
 
