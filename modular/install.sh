@@ -41,8 +41,9 @@ trap cleanup EXIT
 # ───────────────────────────────
 main() {
     clear
+    panel_version=$(grep "LATEST" ../VERSION | awk '{print $2}' | tr -d ' ')
     log_banner "═══════════════════════════════════════════════════════════"
-    log_banner "           3X-UI Automated Installer v2.0"
+    log_banner "           3X-UI Automated Installer v$panel_version"
     log_banner "═══════════════════════════════════════════════════════════"
     echo ""
 
