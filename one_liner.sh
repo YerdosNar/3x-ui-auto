@@ -30,6 +30,7 @@ banner()  { echo -e "${CYAN}${BOLD}$1${NC}"; }
 # ───────────────────────────────
 readonly STATE_FILE="/tmp/.3xui_install_state"
 readonly INSTALL_DIR="$HOME/3x-uiPANEL"
+readonly CADDY_FILENAME="/etc/caddy/Caddyfile"
 
 save_state() {
     cat > "$STATE_FILE" <<EOF
@@ -197,7 +198,7 @@ docker_install() {
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
         sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
     echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
@@ -263,7 +264,7 @@ docker_install() {
             echo -e "${CYAN}bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/one_liner.sh)${NC}"
             echo ""
             read -p "Reboot now? [Y/n]: " REBOOT
-            REBOOT=${REBOOT:-Y}
+REBOOT=${REBOOT:-Y}
             if [[ "$REBOOT" =~ ^[Yy]$ ]]; then
                 clear_state
                 sudo reboot
@@ -319,9 +320,29 @@ EOF
     success "Docker compose file created at $INSTALL_DIR/compose.yml"
 }
 
+
 # ───────────────────────────────
 # Caddy Configuration
 # ───────────────────────────────
+add_header_to_caddy() {
+    local file_to_add="$1"
+    read -r -d '' caddy_header << 'EOF'
+{
+    servers {
+        proxy_protocol {
+            timeout 2s
+            allow 127.0.0.1/8
+        }
+    }
+}
+EOF
+
+    local temp_caddyfile=$(mktemp)
+    printf "%s\n" "$caddy_header" > "$temp_caddyfile"
+    sudo cat "$file_to_add" >> "$temp_caddyfile"
+    sudo mv "$temp_caddyfile" "$file_to_add"
+    success "Header written to $file_to_add!"
+}
 configure_caddy() {
     local dom_name="$1"
     local route="$2"
@@ -329,9 +350,25 @@ configure_caddy() {
     local hash_pw="$4"
     local port="$5"
     local be_port="$6"
+    local redirect_port="$7"
 
-    cat > "$INSTALL_DIR/Caddyfile" <<EOF
-$dom_name {
+    info "Creating Caddyfile configuration"
+    if [ -f "$CADDY_FILENAME" ]; then
+        success "$CADDY_FILENAME exists"
+        info "Looking for the header"
+
+        if ! sudo grep -q "proxy_protocol" "$CADDY_FILENAME" 2>/dev/null; then
+            add_header_to_caddy "$CADDY_FILENAME"
+        else
+            success "Caddy header found"
+        fi
+    else
+        info "$CADDY_FILENAME not found, creating new one"
+        add_header_to_caddy "$INSTALL_DIR/Caddyfile"
+    fi
+
+    cat > caddy_body <<EOF
+$dom_name:$redirect_port {
     encode gzip
 
     tls {
@@ -364,6 +401,7 @@ $dom_name {
 }
 EOF
 
+    printf "%s\n" "$caddy_body" >> "$INSTALL_DIR/Caddyfile"
     success "Caddyfile created at $INSTALL_DIR/Caddyfile"
 }
 
@@ -596,17 +634,112 @@ caddy_install() {
         fi
     done
 
-    configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT"
+    while true; do
+        read -p "Enter port for Caddy [default: $(($PORT-1))]: " REDIRECT_PORT
+        REDIRECT_PORT=${REDIRECT_PORT:-$(($PORT-1))}
+        if validate_port "$REDIRECT_PORT" && check_port_available "$REDIRECT_PORT"; then
+            break
+        fi
+    done
+
+    configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT" "$REDIRECT_PORT"
 
     info "Installing Caddyfile..."
-    sudo cp "$INSTALL_DIR/Caddyfile" /etc/caddy/Caddyfile
+    if [ -f "$CADDY_FILENAME" ]; then
+        info "Existing Caddyfile found at $CADDY_FILENAME"
+
+        if sudo grep -qE "^$dom_name(:|[[:space:]]|\{|$)" "$CADDY_FILENAME"; then
+            warn "Domain $dom_name already exists in Caddyfile!"
+            echo ""
+            read -p "Overwrite existing configuration for $dom_name? [y/N]: " OVERWRITE
+            if [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
+                local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
+                sudo cp "$CADDY_FILENAME" "$backup_file"
+
+                info "Removing old configuratio for $dom_name..."
+                sudo awk -v domain="$dom_name" '
+                    BEGIN { skip=0; brace_count=0 }
+
+                    # Match domain with or without port/brace on same line
+                    $1 == domain || $1 ~ "^" domain ":" || $1 ~ "^" domain "{" {
+                        skip=1
+                        # Count braces on the same line
+                        for (i=1; i<=NF; i++) {
+                            if ($i ~ /{/) brace_count++
+                            if ($i ~ /}/) brace_count--
+                        }
+                        if (brace_count == 0) skip=0
+                        next
+                    }
+
+                    skip {
+                        # Count all braces in the line
+                        for (i=1; i<=NF; i++) {
+                            if ($i ~ /{/) brace_count++
+                            if ($i ~ /}/) brace_count--
+                        }
+                        if (brace_count == 0) skip=0
+                        next
+                    }
+
+                    !skip { print }
+                ' "$CADDY_FILENAME" > /tmp/Caddyfile.tmp
+
+                if [ -s /tmp/Caddyfile.tmp ]; then
+                    sudo mv /tmp/Caddyfile.tmp "$CADDY_FILENAME"
+                else
+                    error "Failed to remove old configuration - backup reserved"
+                    sudo rm -f /tmp/Caddyfile.tmp
+                fi
+
+                info "Appending new configuration for $dom_name"
+                echo "" | sudo tee -a "$CADDY_FILENAME"
+                sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a "$CADDY_FILENAME"
+                success "Configuration for $dom_name appended to Caddyfile!"
+            else
+                warn "Keeping existing configuration. New config saved to: $INSTALL_DIR/Caddyfile"
+                warn "You can manually merge configurations if needed."
+            fi
+        else
+            info "Domain not found in existing Caddyfile, appending..."
+            local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
+            success "Backup created: $backup_file"
+
+            echo "" | sudo tee -a "$CADDY_FILENAME"
+            echo "# 3X-UI Configuration for $dom_name - Added $(date +%s)" | sudo tee -a "$CADDY_FILENAME"
+            sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a "$CADDY_FILENAME"
+            success "Configuration appended to existing Caddyfile!"
+        fi
+    else
+        info "No existing Caddyfile found, creating new one..."
+        sudo mkdir -p /etc/caddy
+        sudo cp $INSTALL_DIR/Caddyfile "$CADDY_FILENAME"
+        success "New Caddyfile created!"
+    fi
 
     info "Testing Caddy configuration..."
-    if sudo caddy validate --config /etc/caddy/Caddyfile; then
-        success "Caddy configuration is valid!"
+    if sudo caddy fmt --overwrite "$CADDY_FILENAME"; then
+        success "FMT --overwrite"
+    fi
+    if sudo caddy validate --config "$CADDY_FILENAME"; then
+        sucess "Caddy configuration is valid!"
     else
         error "Caddy configuration validation failed!"
-        exit 1
+        error "Check the configuration at $CADDY_FILENAME"
+        echo ""
+
+        if ls /etc/caddy/Caddyfile.back.* 1>/dev/null 2>&1; then
+            local latest_backup=$(ls -t /etc/caddy/Caddyfile.backup.* | head -1)
+            echo ""
+            read -p "Restore from backup? [Y/n]: " RESTORE_BACKUP
+            RESTORE_BACKUP=${RESTORE_BACKUP:-Y}
+            if [[ "$RESTORE_BACKUP" =~ [Yy]$ ]]; then
+                sudo cp "$latest_backup" "$CADDY_FILENAME"
+                success "Backup restored: $latest_backup"
+            else
+                warn "Manual restoration command: sudo cp $latest_backup $CADDY_FILENAME"
+            fi
+        fi
     fi
 
     info "Starting Caddy service..."
@@ -627,7 +760,7 @@ caddy_install() {
             banner "═══════════════════════════════════════════════════════════"
             banner "    ✓ 3X-UI Panel Configured Automatically!"
             banner "═══════════════════════════════════════════════════════════"
-            echo -e "${GREEN}Panel URL:${NC}      https://$dom_name/$ROUTE"
+            echo -e "${GREEN}Panel URL:${NC}      https://$dom_name:$REDIRECT_PORT/$ROUTE"
             echo -e "${GREEN}Admin User:${NC}     $ADMIN_NAME"
             echo -e "${GREEN}Password:${NC}       $PASSWORD"
             echo -e "${GREEN}API Endpoint:${NC}   https://$dom_name/api/v1"
@@ -680,9 +813,8 @@ caddy_install() {
 # ───────────────────────────────
 main() {
     clear
-    panel_version=$(grep "LATEST" ./VERSION | awk '{print $2}' | tr -d ' ')
     banner "═══════════════════════════════════════════════════════════"
-    banner "           3X-UI Automated Installer v$panel_version"
+    banner "           3X-UI Automated Installer v2.1.1"
     banner "═══════════════════════════════════════════════════════════"
     echo ""
 
