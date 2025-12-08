@@ -326,6 +326,7 @@ EOF
 # ───────────────────────────────
 add_header_to_caddy() {
     local file_to_add="$1"
+    info "Adding the header to $file_to_add"
     read -r -d '' caddy_header << 'EOF'
 {
     servers {

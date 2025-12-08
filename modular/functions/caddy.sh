@@ -128,6 +128,12 @@ caddy_install() {
         exec_silent "sudo apt update"
         exec_silent "sudo apt install -y caddy"
 
+        if [ -f /etc/caddy/Caddyfile ]; then
+            log_info "Found the default file, removing it..."
+            echo "[CADDY] Removing /etc/caddy/Caddyfile" >> "$LOG_FILE"
+            exec_silent "sudo rm /etc/caddy/Caddyfile"
+            log_success "Removed /etc/caddy/Caddyfile"
+            echo "[CADDY] Removed /etc/caddy/Caddyfile" >> "$LOG_FILE"
         log_success "Caddy installed!"
         echo "[CADDY] Installation completed" >> "$LOG_FILE"
     fi
