@@ -8,17 +8,22 @@ readonly blu="\033[34m"
 readonly cyn="\033[36m"
 readonly bld="\033[1m"
 
-info()      { echo -e "${blu}[i]${noc} $1" ;    }
-success()   { echo -e "${grn}[✓]${noc} $1" ;    }
-warn()      { echo -e "${blu}[i]${noc} $1" ;    }
-error()     { echo -e "${red}[X]${noc} $1" >&2; }
+WIDTH=$(tput cols)
+if [ $WIDTH -gt 90 ]; then
+    WIDTH=90
+fi
+
+info()      { printf "${blu}${bld}[i]${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
+success()   { printf "${grn}${bld}[✓]${noc}%-${WIDTH}s ${grn}${bld}[✓]${noc}\n" "$1";    }
+warn()      { printf "${blu}${bld}[i]${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
+error()     { printf "${red}${bld}[X]${noc}%-${WIDTH}s ${red}${bld}[X]${noc}\n" "$1" >&2; }
 banner()    { echo -e "${cyn}${bld}$1${noc}" ;  }
 
-log_info()      { echo -e "[ INFO ]  $1" >> "$LOG_FILE";    }
-log_success()   { echo -e "[SUCCESS] $1" >> "$LOG_FILE";    }
-log_warn()      { echo -e "[ WARN ]  $1" >> "$LOG_FILE";    }
-log_error()     { echo -e "[ ERROR ] $1" >> "$LOG_FILE" 2>&1; }
-log_banner()    { echo -e "[BANNER ] $1" >> "$LOG_FILE";    }
+log_info()      { echo "[ INFO ]  $1" >> "$LOG_FILE";    }
+log_success()   { echo "[SUCCESS] $1" >> "$LOG_FILE";    }
+log_warn()      { echo "[ WARN ]  $1" >> "$LOG_FILE";    }
+log_error()     { echo "[ ERROR ] $1" >> "$LOG_FILE" 2>&1; }
+log_banner()    { echo "[BANNER ] $1" >> "$LOG_FILE";    }
 
 readonly STATE_FILE="/tmp/.3xui_state"
 readonly LOG_FILE="/tmp/.3xui_log_$$"
@@ -303,8 +308,8 @@ EOF
 }
 
 add_header_to_caddy() {
-    info "Adding header to $file_to_add"
     local file_to_add="$1"
+    info "Adding header to $file_to_add"
     read -r -d '' caddy_header <<'EOF'
 {
     servers {
@@ -346,18 +351,19 @@ configure_caddy() {
         add_header_to_caddy "$INSTALL_DIR/Caddyfile"
     fi
 
-    cat > caddy_body <<EOF
+    cat >> "$INSTALL_DIR/Caddyfile" <<EOF
+
 $dom_name:$redirect_port {
     encode gzip
 
     tls {
-        protocol tls1.3
+        protocols tls1.3
     }
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options nosniff
-        X-Frame-Optioins SAMEORIGIN
+        X-Frame-Options SAMEORIGIN
         Referrer-Policy strict-origin-when-cross-origin
         -Server
         -X-Powered-By
@@ -379,7 +385,6 @@ $dom_name:$redirect_port {
     }
 }
 EOF
-    printf "%s\n" "$caddy_body" >> "$INSTALL_DIR/Caddyfile"
     success "Caddyfile created at $INSTALL_DIR/Caddyfile"
 
     return 0
@@ -655,6 +660,7 @@ caddy_install() {
         else
             info "Domain not found in existing Caddyfile, appending..."
             local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
+            sudo cp "$CADDYFILE" "$backup_file"
             success "Backup created: $backup_file"
 
             echo "" | sudo tee -a "$CADDYFILE"
