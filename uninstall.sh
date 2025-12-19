@@ -29,7 +29,7 @@ banner()  { echo -e "${CYAN}${BOLD}$1${NC}"; }
 # ───────────────────────────────
 # Installation paths
 # ───────────────────────────────
-readonly BASE_DIR="$HOME/3x-uiPANEL"
+readonly BASE_DIR="$HOME/3x-ui"
 readonly STATE_FILE="/tmp/.3xui_install_state"
 
 # ───────────────────────────────
@@ -523,13 +523,13 @@ remove_caddy_config() {
     ' "$caddyfile" | sudo tee "$caddyfile.tmp" >/dev/null
 
     sudo mv "$caddyfile.tmp" "$caddyfile"
-    
+
     # Reload Caddy to apply changes
     if systemctl is-active --quiet caddy 2>/dev/null; then
         info "Reloading Caddy service..."
         sudo systemctl reload caddy 2>/dev/null || true
     fi
-    
+
     success "Removed configuration from Caddyfile"
 }
 
