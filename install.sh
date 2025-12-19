@@ -24,6 +24,7 @@ readonly STATE_FILE="/tmp/.3xui_state"
 readonly LOG_FILE="/tmp/.3xui_log_$$"
 readonly INSTALL_DIR="$HOME/3x-ui_$$"
 readonly CADDYFILE="/etc/caddy/Caddyfile"
+readonly CONTAINER_NAME="3xui_app_$$"
 
 save_state() {
     info "Save state..."
@@ -283,7 +284,7 @@ create_compose() {
 services:
   3xui:
     image: ghcr.io/mhsanaei/3x-ui:latest
-    container_name: 3xui_app_$$
+    container_name: $CONTAINER_NAME
 $c_dom_name
     volumes:
       - "\${PWD}/db/:/etc/x-ui/"
@@ -770,5 +771,137 @@ main() {
         case "$STAGE" in
             DOCKER_INSTALLED)
                 info "Docker was installed. Checking group membership..."
+                if ! groups $USER | grep -q "docker"; then
+                    error "User still not in docker group. Please log out/reboot and try again."
+                    sudo usermod -aG docker $USER
+                    exit 1
+                fi
+                if ! docker info >/dev/null 2>&1; then
+                    error "Cannot connect to Docker. Please log out/reboot and try again."
+                    exit 1
+                fi
+                success "Docker access confirmed! Continuing..."
+                clear_state
+                ;;
+        esac
+    fi
 
+    check_requirements
+    docker_install
+
+    if [ ! -d "$INSTALL_DIR" ]; then
+        mkdir -p "$INSTALL_DIR"
+        success "Created installation directory: $INSTALL_DIR"
+    fi
+
+    cd "$INSTALL_DIR"
+
+    echo ""
+    echo -ne "${blu}Do you have a domain name? [Y/n]: ${noc}"
+    read DN_EXIST
+    DN_EXIST=${DN_EXIST:-Y}
+
+    DOM_NAME=""
+
+    if [[ "$DN_EXIST" =~ ^[Yy]$ ]]; then
+        while true; do
+            read -p "Enter your domain name (e.g., example.com): " DOM_NAME
+            if validate_domain "$DOM_NAME"; then
+                info "Testing DNS resolution for $DOM_NAME..."
+                if host "$DOM_NAME" >/dev/null 2>&1; then
+                    success "Domain $DOM_NAME resolves successfully!"
+                    break
+                else
+                    warn "Domain $DOM_NAME does not resolbe to an IP yet."
+                    read -p "Continue anyway? [y/N]: " CONTINUE
+                    if [[ "$CONTINUE" =~ ^[Yy]$ ]]; then
+                        break
+                    fi
+                fi
+            fi
+        done
+        create_compose "$DOM_NAME"
+    else
+        PUB_IP=$(get_public_ip)
+        if [ -n "$PUB_IP" ]; then
+            info "Your public IP: $PUB_IP"
+        fi
+        create_compose
+    fi
+
+    info "Starting 3X-UI container..."
+    cd "$INSTALL_DIR"
+
+    if docker compose up -d; then
+        success "3X-UI container started!"
+
+        info "Waiting for 3X-UI to be ready..."
+        sleep 5
+
+        if docker ps | grep -q "$CONTAINER_NAME"; then
+            success "3X-UI container is running!"
+        else
+            error "3X-UI container failed to start!"
+            docker logs "$CONTAINER_NAME"
+            exit 1
+        fi
+    else
+        error "Failed to start 3X-UI container!"
+        exit 1
+    fi
+
+    if [[ "$DN_EXIST" =~ ^[Yy]$ ]]; then
+        echo ""
+        echo -ne "${blu}Install Caddy for HTTPS reverse proxy? [Y/n]: ${noc}"
+        read INSTALL_CADDY
+        INSTALL_CADDY=${INSTALL_CADDY:-Y}
+
+        if [[ "$INSTALL_CADDY" =~ ^[Yy]$ ]]; then
+            caddy_install "$DOM_NAME"
+        else
+            warn "Skipping Caddy setup."
+            info "Access 3X-UI at: http://$DOM_NAME:2053"
+            info "Default credential: admin / admin"
+        fi
+    else
+        PUB_IP=$(get_public_ip)
+        warn "═══════════════════════════════════════════════════════════"
+        warn "No domain configured - HTTPS not available"
+        warn "═══════════════════════════════════════════════════════════"
+        echo -e "${grn}Panel URL:${noc}     http://$PUB_IP:2053"
+        echo -e "${grn}Default Login:${noc} admin / admin"
+        warn "═══════════════════════════════════════════════════════════"
+        warn "IMPORTANT: Change default credentials after first login!"
+        warn "═══════════════════════════════════════════════════════════"
+    fi
+
+    echo ""
+
+    success "═══════════════════════════════════════════════════════════"
+    success "            Installation completed successfully"
+    success "═══════════════════════════════════════════════════════════"
+    echo ""
+    info "Installation directory: $INSTALL_DIR"
+    info "Docker compose file: $INSTALL_DIR/compose.yml"
+    if [ -f "$INSTALL_DIR/Caddyfile" ]; then
+        info "Caddyfile: $INSTALL_DIR/Caddyfile"
+    fi
+
+    echo ""
+
+    info "Useful commands:"
+    echo -e "   ${cyn}docker compose logs -f${noc}      # View logs"
+    echo -e "   ${cyn}docker compose restart${noc}      # Restart container"
+    echo -e "   ${cyn}docker compose down -v${noc}      # Stop container"
+    echo -e "   ${cyn}docker compose up -d  ${noc}      # Start container"
+    if command -v caddy &>/dev/null; then
+        echo -e "   ${cyn}sudo systemctl status caddy${noc} # Check Caddy status"
+    fi
+
+    echo ""
+
+    clear_state
+    return 0
 }
+
+main "$@"
