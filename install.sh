@@ -331,5 +331,71 @@ configure_caddy() {
     local redirect_port="$7"
 
     info "Creating Caddyfile configuration..."
+    if [ -f "$CADDYFILE" ]; then
+        success "$CADDYFILE exists"
+        info "Looking for the header..."
+        if ! sudo grep -q "proxy_protocol" "$CADDYFILE" 2>/dev/null; then
+            add_header_to_caddy "$CADDYFILE"
+        else
+            success "Caddy header found!"
+        fi
+    else
+        info "$CADDYFILE not found, creating new one..."
+        add_header_to_caddy "$INSTALL_DIR/Caddyfile"
+    fi
 
+    cat > caddy_body <<EOF
+$dom_name:$redirect_port {
+    encode gzip
+
+    tls {
+        protocol tls1.3
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Optioins SAMEORIGIN
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+        -X-Powered-By
+    }
+
+    route /$route* {
+        basic_auth {
+            $admin_name $hash_pw
+        }
+        reverse_proxy localhost:$by_port
+    }
+
+    route /api/v1* {
+        revverse_proxy localhsot:$port
+    }
+
+    route {
+        repond "Not found" 404
+    }
+}
+EOF
+    printf "%s\n" "$caddy_body" >> "$INSTALL_DIR/Caddyfile"
+    success "Caddyfile created at $INSTALL_DIR/Caddyfile"
+
+    return 0
+}
+
+configure_3xui_panel() {
+    local port="$1"
+    local route="$2"
+    local username="$3"
+    local password="$4"
+
+    local temp_output="/tmp/3xui_output_$$.txt"
+    local cookie_file="/tmp/3xui_cookies_$$.txt"
+    local base_url="http://localhsot:2053"
+
+    trap 'rm -rf "$temp_output" "$cookie_file"' EXIT
+
+    restart_function() {
+
+    }
 }
