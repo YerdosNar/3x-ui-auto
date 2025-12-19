@@ -19,11 +19,11 @@ warn()      { printf "${blu}${bld}[i]${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" 
 error()     { printf "${red}${bld}[X]${noc}%-${WIDTH}s ${red}${bld}[X]${noc}\n" "$1" >&2; }
 banner()    { echo -e "${cyn}${bld}$1${noc}" ;  }
 
-log_info()      { echo "[ INFO ]  $1" >> "$LOG_FILE";    }
-log_success()   { echo "[SUCCESS] $1" >> "$LOG_FILE";    }
-log_warn()      { echo "[ WARN ]  $1" >> "$LOG_FILE";    }
-log_error()     { echo "[ ERROR ] $1" >> "$LOG_FILE" 2>&1; }
-log_banner()    { echo "[BANNER ] $1" >> "$LOG_FILE";    }
+log_info()      { echo "[ INFO ]  $1" >> "$LOG_FILE";       }
+log_success()   { echo "[SUCCESS] $1" >> "$LOG_FILE";       }
+log_warn()      { echo "[ WARN ]  $1" >> "$LOG_FILE";       }
+log_error()     { echo "[ ERROR ] $1" >> "$LOG_FILE" 2>&1;  }
+log_banner()    { echo "[BANNER ] $1" >> "$LOG_FILE";       }
 
 readonly STATE_FILE="/tmp/.3xui_state"
 readonly LOG_FILE="/tmp/.3xui_log_$$"
@@ -120,9 +120,12 @@ get_public_ip() {
     ip=$(curl -s --max-time 5 ifconfig.me || curl -s --max-time 5 icanhazip.com || echo "")
     if [ -z "$ip" ]; then
         error "Failed to retrieve public IP"
+        log_error "Failed to retrieve public IP"
+        echo ""
         return 1
     fi
     success "Public IP: $ip"
+    log_success "Public IP: $ip"
     return 0
 }
 
@@ -343,7 +346,9 @@ add_header_to_caddy() {
 EOF
     local temp_caddyfile=$(mktemp)
     printf "%s\n" "$caddy_header" > "$temp_caddyfile"
-    sudo cat "$file_to_add" >> "$temp_caddyfile"
+    if [ -f "$file_to_add" ]; then
+        sudo cat "$file_to_add" >> "$temp_caddyfile"
+    fi
     sudo mv "$temp_caddyfile" "$file_to_add"
     success "Header added to $file_to_add!"
     return 0
@@ -867,7 +872,7 @@ main() {
                     success "Domain $DOM_NAME resolves successfully!"
                     break
                 else
-                    warn "Domain $DOM_NAME does not resolbe to an IP yet."
+                    warn "Domain $DOM_NAME does not resolve to an IP yet."
                     read -p "Continue anyway? [y/N]: " CONTINUE
                     if [[ "$CONTINUE" =~ ^[Yy]$ ]]; then
                         break
