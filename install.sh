@@ -17,7 +17,7 @@ banner()    { echo -e "${cyn}${bld}$1${noc}" ;  }
 log_info()      { echo -e "[ INFO ]  $1" >> "$LOG_FILE";    }
 log_success()   { echo -e "[SUCCESS] $1" >> "$LOG_FILE";    }
 log_warn()      { echo -e "[ WARN ]  $1" >> "$LOG_FILE";    }
-log_error()     { echo -e "[ ERROR ] $1" >&2>> "$LOG_FILE"; }
+log_error()     { echo -e "[ ERROR ] $1" >> "$LOG_FILE" 2>&1; }
 log_banner()    { echo -e "[BANNER ] $1" >> "$LOG_FILE";    }
 
 readonly STATE_FILE="/tmp/.3xui_state"
@@ -43,7 +43,7 @@ EOF
 }
 
 load_state() {
-    info "Loadin state..."
+    info "Loading state..."
     if [ -f "$STATE_FILE" ]; then
         source "$STATE_FILE"
         success "State loaded!"
@@ -80,6 +80,7 @@ validate_domain() {
 }
 
 validate_port() {
+    local port="$1"
     info "Validating port..."
     if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
         error "Invalid port number: $port (must be 1-65535)"
@@ -132,7 +133,7 @@ check_requirements() {
         exit 1
     fi
 
-    local available_space=$(df -BG / | awk 'NR=2 {print $4}' | sed 's/G//')
+    local available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
     if [ "$available_space" -lt 2 ]; then
         error "Insufficient disk space."
         echo "    Required : 2GB."
@@ -194,7 +195,7 @@ EOF
     sudo apt update
 
     info "Installing Docker..."
-    sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
     success "Docker installation finished!"
 
@@ -294,7 +295,7 @@ $c_dom_name
       XUI_ENABLE_FAIL2BAN: "true"
     tty: true
     network_mode: host
-    restart: unless_stopped
+    restart: unless-stopped
 EOF
 
     success "Docker compose file created at $INSTALL_DIR/"
@@ -366,15 +367,15 @@ $dom_name:$redirect_port {
         basic_auth {
             $admin_name $hash_pw
         }
-        reverse_proxy localhost:$by_port
+        reverse_proxy localhost:$be_port
     }
 
     route /api/v1* {
-        revverse_proxy localhsot:$port
+        reverse_proxy localhost:$port
     }
 
     route {
-        repond "Not found" 404
+        respond "Not found" 404
     }
 }
 EOF
@@ -392,7 +393,7 @@ configure_3xui_panel() {
 
     local temp_output="/tmp/3xui_output_$$.txt"
     local cookie_file="/tmp/3xui_cookies_$$.txt"
-    local base_url="http://localhsot:2053"
+    local base_url="http://localhost:2053"
 
     trap 'rm -rf "$temp_output" "$cookie_file"' EXIT
 
@@ -463,7 +464,7 @@ configure_3xui_panel() {
         -d "oldUsername=admin&oldPassword=admin&newUsername=$username&newPassword=$password" \
         > "$temp_output"
 
-    if grep -Eq '"success":\*true|successfully' "$temp_output"; then
+    if grep -Eq '"success":\s*true|successfully' "$temp_output"; then
         success "Admin credentials updated!"
     else
         warn "Could not update credentials automatically."
@@ -588,7 +589,7 @@ caddy_install() {
     done
 
     while true; do
-        read -p "Enter port for Caddy [default: $((PORT-1))]" REDIRECT_PORT
+        read -p "Enter port for Caddy [default: $((PORT-1))]: " REDIRECT_PORT
         REDIRECT_PORT=${REDIRECT_PORT:-$((PORT-1))}
         if validate_port "$REDIRECT_PORT" && check_port_availability "$REDIRECT_PORT"; then
             break
