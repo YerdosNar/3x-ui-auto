@@ -13,10 +13,10 @@ if [ $WIDTH -gt 90 ]; then
     WIDTH=90
 fi
 
-info()      { printf "${blu}${bld}[i]${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
-success()   { printf "${grn}${bld}[✓]${noc}%-${WIDTH}s ${grn}${bld}[✓]${noc}\n" "$1";    }
-warn()      { printf "${blu}${bld}[i]${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
-error()     { printf "${red}${bld}[X]${noc}%-${WIDTH}s ${red}${bld}[X]${noc}\n" "$1" >&2; }
+info()      { printf "${blu}${bld}[i] ${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
+success()   { printf "${grn}${bld}[✓] ${noc}%-${WIDTH}s ${grn}${bld}[✓]${noc}\n" "$1";    }
+warn()      { printf "${blu}${bld}[i] ${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
+error()     { printf "${red}${bld}[X] ${noc}%-${WIDTH}s ${red}${bld}[X]${noc}\n" "$1" >&2; }
 banner()    { echo -e "${cyn}${bld}$1${noc}" ;  }
 
 log_info()      { echo "[ INFO ]  $1" >> "$LOG_FILE";       }
