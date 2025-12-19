@@ -33,6 +33,7 @@ readonly CONTAINER_NAME="3xui_app_$$"
 
 save_state() {
     info "Save state..."
+    log_info "Save state..."
     local stage=$1
     cat > "$STATE_FILE" <<EOF
 STAGE=$stage
@@ -49,17 +50,20 @@ EOF
 
 load_state() {
     info "Loading state..."
+    log_info "Loading state..."
     if [ -f "$STATE_FILE" ]; then
         source "$STATE_FILE"
         success "State loaded!"
         return 0
     fi
     info "No state file"
+    log_info "No state file"
     return 1
 }
 
 clear_state() {
     info "Clearing state..."
+    log_info "Clearing state..."
     rm -f "$STATE_FILE"
     success "State cleared!"
 }
@@ -75,6 +79,7 @@ trap cleanup EXIT
 # Validation
 validate_domain() {
     info "Validating domain name..."
+    log_info "Validating domain name..."
     local domain="$1"
     if [[ ! "$domain" =~ ^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]; then
         error "Invalid domain name format: $domain"
@@ -87,6 +92,7 @@ validate_domain() {
 validate_port() {
     local port="$1"
     info "Validating port..."
+    log_info "Validating port..."
     if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
         error "Invalid port number: $port (must be 1-65535)"
         return 1
@@ -97,6 +103,7 @@ validate_port() {
 
 check_port_availability() {
     info "Checking port availability..."
+    log_info "Checking port availability..."
     local port=$1
     if sudo lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
         error "Port $port is already in use"
@@ -108,6 +115,7 @@ check_port_availability() {
 
 get_public_ip() {
     info "Getting public IP..."
+    log_info "Getting public IP..."
     local ip
     ip=$(curl -s --max-time 5 ifconfig.me || curl -s --max-time 5 icanhazip.com || echo "")
     if [ -z "$ip" ]; then
@@ -121,6 +129,7 @@ get_public_ip() {
 # check requirements
 check_requirements() {
     info "Checking system requirements..."
+    log_info "Checking system requirements..."
 
     if [ "$EUID" -eq 0 ]; then
         error "Do ${red}${bld}NOT${noc} run this as root. Run as user with sudo privileges."
@@ -164,6 +173,7 @@ check_requirements() {
 
 docker_install() {
     info "Checking Docker installation..."
+    log_info "Checking Docker installation..."
 
     if command -v docker &>/dev/null && docker --version &>/dev/null; then
         success "Docker is already installed: $(docker --version)"
@@ -171,13 +181,16 @@ docker_install() {
     fi
 
     info "Removing old Docker..."
+    log_info "Removing old Docker..."
     sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) || true
 
     info "Updating system packages..."
+    log_info "Updating system packages..."
     sudo apt-get update -y
     sudo apt-get install -y ca-certificates curl gnupg lsb-release
 
     info "Setting up Docker repository..."
+    log_info "Setting up Docker repository..."
     sudo install -m 0755 -d /etc/apt/keyrings
 
     if [ -f /etc/apt/keyrings/docker.gpg ]; then
@@ -188,6 +201,7 @@ docker_install() {
     sudo chmod a+r /etc/apt/keyrings/docker.asc
 
     info "Add the repository to Apt sources:"
+    log_info "Add the repository to Apt sources:"
     sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
@@ -197,14 +211,17 @@ Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 
     info "Updating the system..."
+    log_info "Updating the system..."
     sudo apt update
 
     info "Installing Docker..."
+    log_info "Installing Docker..."
     sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
     success "Docker installation finished!"
 
     info "Enabling Docker service..."
+    log_info "Enabling Docker service..."
     for i in {1..30}; do
         if sudo docker info >/dev/null 2>&1; then
             success "Docker daemon is ready!"
@@ -219,6 +236,7 @@ EOF
 
     if ! groups $USER | grep -q "docker"; then
         info "Adding user '$USER' to docker group"
+        log_info "Adding user '$USER' to docker group"
         sudo usermod -aG docker "$USER"
 
         warn "═══════════════════════════════════════════════════════════"
@@ -264,6 +282,7 @@ EOF
 
     # Testing
     info "Testing Docker installation..."
+    log_info "Testing Docker installation..."
     if docker run --rm hello-world >/dev/null 2>&1; then
         success "Docker test passed!"
     else
@@ -277,6 +296,7 @@ EOF
 
 create_compose() {
     info "Creating compose file"
+    log_info "Creating compose file"
     local dom_name="$1"
     local c_dom_name
 
@@ -310,6 +330,7 @@ EOF
 add_header_to_caddy() {
     local file_to_add="$1"
     info "Adding header to $file_to_add"
+    log_info "Adding header to $file_to_add"
     read -r -d '' caddy_header <<'EOF'
 {
     servers {
@@ -338,9 +359,11 @@ configure_caddy() {
     local redirect_port="$7"
 
     info "Creating Caddyfile configuration..."
+    log_info "Creating Caddyfile configuration..."
     if [ -f "$CADDYFILE" ]; then
         success "$CADDYFILE exists"
         info "Looking for the header..."
+        log_info "Looking for the header..."
         if ! sudo grep -q "proxy_protocol" "$CADDYFILE" 2>/dev/null; then
             add_header_to_caddy "$CADDYFILE"
         else
@@ -348,6 +371,7 @@ configure_caddy() {
         fi
     else
         info "$CADDYFILE not found, creating new one..."
+        log_info "$CADDYFILE not found, creating new one..."
         add_header_to_caddy "$INSTALL_DIR/Caddyfile"
     fi
 
@@ -404,6 +428,7 @@ configure_3xui_panel() {
 
     restart_function() {
         info "Restarting 3X-UI panel..."
+        log_info "Restarting 3X-UI panel..."
         curl -s --fail -b "$cookie_file" -X POST \
             "$base_url/panel/setting/restartPanel" \
             > "$temp_output"
@@ -435,12 +460,15 @@ configure_3xui_panel() {
     }
 
     info "Configuring 3X-UI panel setting automatically..."
+    log_info "Configuring 3X-UI panel setting automatically..."
     local max_attempts=30
     local attempt=0
 
     info "Waiting for 3X-UI panel to be ready..."
+    log_info "Waiting for 3X-UI panel to be ready..."
     while [ $attempt -lt $max_attempts ]; do
         info "Attempt: $((attempt+1))/$max_attempts..."
+        log_info "Attempt: $((attempt+1))/$max_attempts..."
         if curl -s --fail "$base_url" >/dev/null 2>&1; then
             success "3X-UI is responding!"
             break
@@ -457,12 +485,14 @@ configure_3xui_panel() {
     sleep 2
 
     info "Loggin in to 3X-UI panel..."
+    log_info "Loggin in to 3X-UI panel..."
     if ! login_function "admin" "admin"; then
         error "Initial login with (admin/admin) failed. Aborting..."
         return 1
     fi
 
     info "Updating admin credentials..."
+    log_info "Updating admin credentials..."
     curl -s --fail -b "$cookie_file" -X POST                                                 \
         "$base_url/panel/setting/updateUser"                                                 \
         -H "Content-Type: application/x-www-form-urlencoded"                                 \
@@ -483,6 +513,7 @@ configure_3xui_panel() {
     fi
 
     info "Updating panel port to $port and path to /$route..."
+    log_info "Updating panel port to $port and path to /$route..."
     curl -s --fail -b "$cookie_file" -X POST \
         "$base_url/panel/setting/update"                                            \
         -H "Content-Type: application/x-www-form-urlencoded"                        \
@@ -500,10 +531,12 @@ configure_3xui_panel() {
     restart_function
 
     info "Waiting for panel to restart..."
+    log_info "Waiting for panel to restart..."
 
     local verify_attempts=0
     while [ $verify_attempts -lt 10 ]; do
         info "Attempt: $((verify_attempts+1))"
+        log_info "Attempt: $((verify_attempts+1))"
         if curl -s --fail "http://localhost:$port/$route" >/dev/null 2>&1; then
             success "Panel is accessible on new port $port!"
             return 0
@@ -520,11 +553,13 @@ caddy_install() {
     local dom_name="$1"
 
     info "Checking Caddy installation..."
+    log_info "Checking Caddy installation..."
 
     if command -v caddy &> /dev/null; then
         success "Caddy is already installed: $(caddy version)"
     else
         info "Installing Caddy..."
+        log_info "Installing Caddy..."
         sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
 
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -536,6 +571,7 @@ caddy_install() {
         chmod o+r /etc/apt/sources.list.d/caddy-stable.list
 
         info "Deleting default Caddyfile..."
+        log_info "Deleting default Caddyfile..."
         sudo rm -f /etc/caddy/Caddyfile
 
         sudo apt update
@@ -545,6 +581,7 @@ caddy_install() {
     fi
 
     info "Configuring Caddy reverse proxy..."
+    log_info "Configuring Caddy reverse proxy..."
     echo ""
 
     read -p "Enter admin username [default: admin]: " ADMIN_NAME
@@ -604,8 +641,10 @@ caddy_install() {
     configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT" "$REDIRECT_PORT"
 
     info "Installing Caddyfile..."
+    log_info "Installing Caddyfile..."
     if [ -f "$CADDYFILE" ]; then
         info "Existing Caddyfile found at $CADDYFILE"
+        log_info "Existing Caddyfile found at $CADDYFILE"
 
         if sudo grep -qE "^$dom_name(:|[[:space:]]|\{|$)" "$CADDYFILE"; then
             warn "Domain $dom_name already exists in Cadyfile."
@@ -616,6 +655,7 @@ caddy_install() {
                 sudo cp "$CADDYFILE" "$backup_file"
 
                 info "Removing old configuration for $dom_name..."
+                log_info "Removing old configuration for $dom_name..."
                 sudo awk -v domain="$dom_name" '
                     BEGIN { skip=0; brace_count=0 }
 
@@ -649,6 +689,7 @@ caddy_install() {
                 fi
 
                 info "Appending new configuration for $dom_name"
+                log_info "Appending new configuration for $dom_name"
                 echo "" | sudo tee -a "$CADDYFILE"
                 sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a "$CADDYFILE"
                 success "Configuration for $dom_name appended to Caddyfile!"
@@ -659,6 +700,7 @@ caddy_install() {
             fi
         else
             info "Domain not found in existing Caddyfile, appending..."
+            log_info "Domain not found in existing Caddyfile, appending..."
             local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
             sudo cp "$CADDYFILE" "$backup_file"
             success "Backup created: $backup_file"
@@ -670,12 +712,14 @@ caddy_install() {
         fi
     else
         info "No existing Caddyfile found, creating new one..."
+        log_info "No existing Caddyfile found, creating new one..."
         sudo mkdir -p /etc/caddy
         sudo cp $INSTALL_DIR/Caddyfile "$CADDYFILE"
         success "New Caddyfile created!"
     fi
 
     info "Testing Caddy configuration..."
+    log_info "Testing Caddy configuration..."
     if sudo caddy fmt --overwrite "$CADDYFILE"; then
         success "FMT --overwrite"
     fi
@@ -703,6 +747,7 @@ caddy_install() {
     fi
 
     info "Starting Caddy service..."
+    log_info "Starting Caddy service..."
     sudo systemctl enable --now caddy
 
     sleep 2
@@ -775,9 +820,11 @@ main() {
 
     if load_state; then
         info "Resuming installation from stage: $STAGE"
+        log_info "Resuming installation from stage: $STAGE"
         case "$STAGE" in
             DOCKER_INSTALLED)
                 info "Docker was installed. Checking group membership..."
+                log_info "Docker was installed. Checking group membership..."
                 if ! groups $USER | grep -q "docker"; then
                     error "User still not in docker group. Please log out/reboot and try again."
                     sudo usermod -aG docker $USER
@@ -815,6 +862,7 @@ main() {
             read -p "Enter your domain name (e.g., example.com): " DOM_NAME
             if validate_domain "$DOM_NAME"; then
                 info "Testing DNS resolution for $DOM_NAME..."
+                log_info "Testing DNS resolution for $DOM_NAME..."
                 if host "$DOM_NAME" >/dev/null 2>&1; then
                     success "Domain $DOM_NAME resolves successfully!"
                     break
@@ -832,17 +880,20 @@ main() {
         PUB_IP=$(get_public_ip)
         if [ -n "$PUB_IP" ]; then
             info "Your public IP: $PUB_IP"
+            log_info "Your public IP: $PUB_IP"
         fi
         create_compose
     fi
 
     info "Starting 3X-UI container..."
+    log_info "Starting 3X-UI container..."
     cd "$INSTALL_DIR"
 
     if docker compose up -d; then
         success "3X-UI container started!"
 
         info "Waiting for 3X-UI to be ready..."
+        log_info "Waiting for 3X-UI to be ready..."
         sleep 5
 
         if docker ps | grep -q "$CONTAINER_NAME"; then
@@ -868,7 +919,9 @@ main() {
         else
             warn "Skipping Caddy setup."
             info "Access 3X-UI at: http://$DOM_NAME:2053"
+            log_info "Access 3X-UI at: http://$DOM_NAME:2053"
             info "Default credential: admin / admin"
+            log_info "Default credential: admin / admin"
         fi
     else
         PUB_IP=$(get_public_ip)
@@ -889,14 +942,18 @@ main() {
     success "═══════════════════════════════════════════════════════════"
     echo ""
     info "Installation directory: $INSTALL_DIR"
+    log_info "Installation directory: $INSTALL_DIR"
     info "Docker compose file: $INSTALL_DIR/compose.yml"
+    log_info "Docker compose file: $INSTALL_DIR/compose.yml"
     if [ -f "$INSTALL_DIR/Caddyfile" ]; then
         info "Caddyfile: $INSTALL_DIR/Caddyfile"
+        log_info "Caddyfile: $INSTALL_DIR/Caddyfile"
     fi
 
     echo ""
 
     info "Useful commands:"
+    log_info "Useful commands:"
     echo -e "   ${cyn}docker compose logs -f${noc}      # View logs"
     echo -e "   ${cyn}docker compose restart${noc}      # Restart container"
     echo -e "   ${cyn}docker compose down -v${noc}      # Stop container"
