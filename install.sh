@@ -20,7 +20,8 @@ error()     { printf "${red}${bld}[X] ${noc}%-${WIDTH}s ${red}${bld}[X]${noc}\n"
 banner()    { echo -e "${cyn}${bld}$1${noc}" ;  }
 
 log_info()      { echo "[ INFO ]  $1" >> "$LOG_FILE";       }
-log_success()   { echo "[SUCCESS] $1" >> "$LOG_FILE";       }
+log_success()   { echo "[SUCCESS] $1" >> "$LOG_FILE"       &&
+                  echo ""             >> "$LOG_FILE";       }
 log_warn()      { echo "[ WARN ]  $1" >> "$LOG_FILE";       }
 log_error()     { echo "[ ERROR ] $1" >> "$LOG_FILE" 2>&1;  }
 log_banner()    { echo "[BANNER ] $1" >> "$LOG_FILE";       }
