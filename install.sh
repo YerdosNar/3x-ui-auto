@@ -233,12 +233,12 @@ docker_install() {
 
     info "Removing old Docker..."
     log_info "Removing old Docker..."
-    sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) || true
+    sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) >> "$LOG_FILE" 2>&1 || true
 
     info "Updating system packages..."
     log_info "Updating system packages..."
-    sudo apt-get update -y
-    sudo apt-get install -y ca-certificates curl gnupg lsb-release
+    sudo apt-get update -y >> "$LOG_FILE" 2>&1
+    sudo apt-get install -y ca-certificates curl gnupg lsb-release >> "$LOG_FILE" 2>&1
 
     info "Setting up Docker repository..."
     log_info "Setting up Docker repository..."
@@ -248,8 +248,8 @@ docker_install() {
         sudo rm /etc/apt/keyrings/docker.gpg
     fi
 
-    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc 2>> "$LOG_FILE"
+    sudo chmod a+r /etc/apt/keyrings/docker.asc 2>> "$LOG_FILE"
 
     info "Add the repository to Apt sources:"
     log_info "Add the repository to Apt sources:"
@@ -263,11 +263,11 @@ EOF
 
     info "Updating the system..."
     log_info "Updating the system..."
-    sudo apt update
+    sudo apt update >> "$LOG_FILE" 2>&1
 
     info "Installing Docker..."
     log_info "Installing Docker..."
-    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >> "$LOG_FILE" 2>&1
 
     success "Docker installation finished!"
     log_success "Docker installation finished!"
@@ -658,18 +658,18 @@ caddy_install() {
     else
         info "Installing Caddy..."
         log_info "Installing Caddy..."
-        sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+        sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl >> "$LOG_FILE" 2>&1
 
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' 2>> "$LOG_FILE" | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>> "$LOG_FILE"
 
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' 2>> "$LOG_FILE" | sudo tee /etc/apt/sources.list.d/caddy-stable.list 2>> "$LOG_FILE"
 
         sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>/dev/null || true
 
         sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list 2>/dev/null || true
 
-        sudo apt update
-        sudo apt install -y caddy
+        sudo apt update >> "$LOG_FILE" 2>&1
+        sudo apt install -y caddy >> "$LOG_FILE" 2>&1
 
         info "Deleting default Caddyfile..."
         log_info "Deleting default Caddyfile..."
