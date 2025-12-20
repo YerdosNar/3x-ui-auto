@@ -182,7 +182,7 @@ check_requirements() {
     fi
 
     local missing_cmds=()
-    for cmd in curl gpg apt-get systemctl lsof docker; do
+    for cmd in curl gpg apt-get systemctl lsof; do
         if ! command -v "$cmd" &> /dev/null; then
             missing_cmds+=("$cmd")
         fi
