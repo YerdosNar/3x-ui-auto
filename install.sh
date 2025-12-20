@@ -9,14 +9,35 @@ readonly cyn="\033[36m"
 readonly bld="\033[1m"
 
 WIDTH=$(tput cols)
-if [ $WIDTH -gt 90 ]; then
-    WIDTH=85
-fi
+[ "$WIDTH" -gt 90 ] && WIDTH=85
 
-info()      { printf "${blu}${bld}[i] ${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
-success()   { printf "${grn}${bld}[✓] ${noc}%-${WIDTH}s ${grn}${bld}[✓]${noc}\n" "$1";    }
-warn()      { printf "${blu}${bld}[i] ${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
-error()     { printf "${red}${bld}[X] ${noc}%-${WIDTH}s ${red}${bld}[X]${noc}\n" "$1" >&2; }
+# Logic to truncate and pad
+print_line() {
+    local symbol="$1"
+    local color="$2"
+    local raw_msg="$3"
+    local out_stream="${4:-1}" # Default to stdout (1)
+
+    # 1. Truncate the message to the WIDTH
+    local msg="${raw_msg:0:$((WIDTH-3))}"
+    local msg_len=${#msg}
+
+    # 2. Calculate dots (if any)
+    local dots_needed=$((WIDTH - msg_len))
+    local dots=""
+    if [ "$dots_needed" -gt 0 ]; then
+        dots=$(printf '%*s' "$dots_needed" '' | tr ' ' '.')
+    fi
+
+    # 3. Print the formatted line
+    printf "${color}${bld}[%s]>${noc}%s${color}${bld}%s<[%s]${noc}\n" \
+        "$symbol" "$msg" "$dots" "$symbol" >&"$out_stream"
+}
+
+info()    { print_line "i" "$blu" "$1"       ;  }
+success() { print_line "✓" "$grn" "$1"       ;  }
+warn()    { print_line "!" "$yel" "$1"       ;  }
+error()   { print_line "X" "$red" "$1" 2     ;  }
 banner()    { echo -e "${cyn}${bld}$1${noc}" ;  }
 
 log_info()      { echo "[ INFO ]  $1" >> "$LOG_FILE";       }
