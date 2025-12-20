@@ -144,6 +144,7 @@ get_public_ip() {
     fi
     success "Public IP: $ip"
     log_success "Public IP: $ip"
+    echo "$ip"
     return 0
 }
 
