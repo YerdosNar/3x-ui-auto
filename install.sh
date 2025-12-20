@@ -827,6 +827,8 @@ caddy_install() {
         log_success "New Caddyfile created!"
     fi
 
+    sudo chmod 644 "$CADDYFILE"
+
     info "Testing Caddy configuration..."
     log_info "Testing Caddy configuration..."
     if sudo caddy fmt --overwrite "$CADDYFILE"; then
@@ -851,6 +853,7 @@ caddy_install() {
             restore_backup=${restore_backup:-Y}
             if [[ "$restore_backup" =~ ^[Yy]$ ]]; then
                 sudo cp "$latest_backup" "$CADDYFILE"
+                sudo chmod 644 "$CADDYFILE"
                 success "Backup restored: $latest_backup"
                 log_success "Backup restored: $latest_backup"
             else
