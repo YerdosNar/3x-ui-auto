@@ -10,7 +10,7 @@ readonly bld="\033[1m"
 
 WIDTH=$(tput cols)
 if [ $WIDTH -gt 90 ]; then
-    WIDTH=90
+    WIDTH=85
 fi
 
 info()      { printf "${blu}${bld}[i] ${noc}%-${WIDTH}s ${blu}${bld}[i]${noc}\n" "$1";    }
@@ -383,9 +383,11 @@ add_header_to_caddy() {
     read -r -d '' caddy_header <<'EOF'
 {
     servers {
-        proxy_protocol {
-            timeout 2s
-            allow 127.0.0.1/8
+        listener_wrappers {
+            proxy_protocol {
+                timeout 2s
+                allow 127.0.0.1/8
+            }
         }
     }
 }
