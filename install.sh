@@ -295,7 +295,8 @@ EOF
             log_warn "After LOGGIN IN, run this command again:"
             echo -e "${cyn}bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/install.sh)${noc}"
             echo ""
-            read -p "Press ${yel}ENTER${noc} to logout now (or Ctrl+C to cancel)..."
+            echo -e "Press ${yel}ENTER${noc} to logout now (or Ctrl+C to cancel)..."
+            read
             clear_state
 
             if [ -n "${SSH_CONNECTION:-}" ]; then
@@ -643,12 +644,12 @@ caddy_install() {
 
         sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list 2>/dev/null || true
 
+        sudo apt update
+        sudo apt install -y caddy
+
         info "Deleting default Caddyfile..."
         log_info "Deleting default Caddyfile..."
         sudo rm -f /etc/caddy/Caddyfile
-
-        sudo apt update
-        sudo apt install -y caddy
 
         success "Caddy installed!"
         log_success "Caddy installed!"
