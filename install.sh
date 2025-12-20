@@ -31,6 +31,14 @@ readonly INSTALL_DIR="$HOME/3x-ui_$$"
 readonly CADDYFILE="/etc/caddy/Caddyfile"
 readonly CONTAINER_NAME="3xui_app_$$"
 
+# Initialize log file
+log_init() {
+    echo "====================================" >  "$LOG_FILE"
+    echo "# Log file created at $(date +%s)"    >> "$LOG_FILE"
+    echo "====================================" >> "$LOG_FILE"
+    chmod 600 "$LOG_FILE"
+}
+
 save_state() {
     info "Save state..."
     log_info "Save state..."
@@ -46,6 +54,7 @@ BE_PORT=${BE_PORT}
 EOF
     chmod 600 "$STATE_FILE"
     success "State saved!"
+    log_success "State saved!"
 }
 
 load_state() {
@@ -54,6 +63,7 @@ load_state() {
     if [ -f "$STATE_FILE" ]; then
         source "$STATE_FILE"
         success "State loaded!"
+        log_success "State loaded!"
         return 0
     fi
     info "No state file"
@@ -66,12 +76,14 @@ clear_state() {
     log_info "Clearing state..."
     rm -f "$STATE_FILE"
     success "State cleared!"
+    log_success "State cleared!"
 }
 
 cleanup() {
     local exit_code=$?
     if [ $exit_code -ne 0 ]; then
         error "Installation failed! Check log file: $LOG_FILE"
+        log_error "Installation failed! Check log file: $LOG_FILE"
     fi
 }
 trap cleanup EXIT
@@ -83,9 +95,11 @@ validate_domain() {
     local domain="$1"
     if [[ ! "$domain" =~ ^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]; then
         error "Invalid domain name format: $domain"
+        log_error "Invalid domain name format: $domain"
         return 1
     fi
     success "Domain is valid!"
+    log_success "Domain is valid!"
     return 0
 }
 
@@ -95,9 +109,11 @@ validate_port() {
     log_info "Validating port..."
     if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
         error "Invalid port number: $port (must be 1-65535)"
+        log_error "Invalid port number: $port (must be 1-65535)"
         return 1
     fi
     success "Port is valid!"
+    log_success "Port is valid!"
     return 0
 }
 
@@ -107,9 +123,11 @@ check_port_availability() {
     local port=$1
     if sudo lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
         error "Port $port is already in use"
+        log_error "Port $port is already in use"
         return 1
     fi
     success "Port is available!"
+    log_success "Port is available!"
     return 0
 }
 
@@ -136,41 +154,47 @@ check_requirements() {
 
     if [ "$EUID" -eq 0 ]; then
         error "Do ${red}${bld}NOT${noc} run this as root. Run as user with sudo privileges."
+        log_error "Do NOT run this as root. Run as user with sudo privileges."
         exit 1
     fi
 
     if ! sudo -v; then
         error "Sudo authentication failed. SUDO privileges needed."
+        log_error "Sudo authentication failed. SUDO privileges needed."
         exit 1
     fi
 
     source /etc/os-release
     if [[ ! "$ID" =~ ^(ubuntu|debian)$ ]]; then
         error "This script runs only in Ubuntu|Debian."
+        log_error "This script runs only in Ubuntu|Debian."
         exit 1
     fi
 
     local available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
     if [ "$available_space" -lt 2 ]; then
         error "Insufficient disk space."
+        log_error "Insufficient disk space."
         echo "    Required : 2GB."
         echo "    Available: ${available_space}GB."
         exit 1
     fi
 
     local missing_cmds=()
-    for cmd in curl gpg apt-get systemctl; do
-        if ! command -v $cmd &> /dev/null; then
+    for cmd in curl gpg apt-get systemctl lsof docker; do
+        if ! command -v "$cmd" &> /dev/null; then
             missing_cmds+=("$cmd")
         fi
     done
 
     if [ ${#missing_cmds[@]} -gt 0 ]; then
         error "Missing required commands: ${missing_cmds[*]}"
+        log_error "Missing required commands: ${missing_cmds[*]}"
         exit 1
     fi
 
     success "System requirements check passed!"
+    log_success "System requirements check passed!"
     return 0
 }
 
@@ -180,6 +204,7 @@ docker_install() {
 
     if command -v docker &>/dev/null && docker --version &>/dev/null; then
         success "Docker is already installed: $(docker --version)"
+        log_success "Docker is already installed: $(docker --version)"
         return 0
     fi
 
@@ -222,16 +247,23 @@ EOF
     sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
     success "Docker installation finished!"
+    log_success "Docker installation finished!"
 
     info "Enabling Docker service..."
     log_info "Enabling Docker service..."
+    sudo systemctl enable docker 2>/dev/null || true
+    sudo systemctl start docker 2>/dev/null || true
+
     for i in {1..30}; do
         if sudo docker info >/dev/null 2>&1; then
             success "Docker daemon is ready!"
+            log_success "Docker daemon is ready!"
             break
         fi
         if [ $i -eq 30 ]; then
             error "Docker daemon failed to start within 30 seconds"
+            log_error "Docker daemon failed to start within 30 seconds"
+            sudo journalctl -u docker -n 20 --no-pager
             exit 1
         fi
         sleep 1
@@ -243,8 +275,11 @@ EOF
         sudo usermod -aG docker "$USER"
 
         warn "═══════════════════════════════════════════════════════════"
+        log_warn "═══════════════════════════════════════════════════════════"
         warn "User added to docker group. Session restart required!"
+        log_warn "User added to docker group. Session restart required!"
         warn "═══════════════════════════════════════════════════════════"
+        log_warn "═══════════════════════════════════════════════════════════"
         echo ""
 
         read -p "Is this a (S)erver or (L)ocal machine? [S/l]: " MACHINE_TYPE
@@ -254,7 +289,9 @@ EOF
 
         if [[ "$MACHINE_TYPE" =~ ^[Ss]$ ]]; then
             warn "You need to LOG OUT and LOG back IN to apply group changes."
+            log_warn "You need to LOG OUT and LOG back IN to apply group changes."
             warn "After LOGGIN IN, run this command again:"
+            log_warn "After LOGGIN IN, run this command again:"
             echo -e "${cyn}bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/install.sh)${noc}"
             echo ""
             read -p "Press ${yel}ENTER${noc} to logout now (or Ctrl+C to cancel)..."
@@ -268,7 +305,9 @@ EOF
             exit 0
         else
             warn "You need to REBOOT to apply group changes."
+            log_warn "You need to REBOOT to apply group changes."
             warn "After reboot, run this command again: "
+            log_warn "After reboot, run this command again: "
             echo -e "${cyn}bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/install.sh)${noc}"
             echo ""
             read -p "Reboot now? [Y/n]: " REBOOT
@@ -278,6 +317,7 @@ EOF
                 sudo reboot
             else
                 warn "Please reboot manually ad run the script again."
+                log_warn "Please reboot manually ad run the script again."
                 exit 0
             fi
         fi
@@ -288,12 +328,15 @@ EOF
     log_info "Testing Docker installation..."
     if docker run --rm hello-world >/dev/null 2>&1; then
         success "Docker test passed!"
+        log_success "Docker test passed!"
     else
         error "Docker test failed. Try running: docker run hello-world"
+        log_error "Docker test failed. Try running: docker run hello-world"
         exit 1
     fi
 
     success "Docker installation completed!"
+    log_success "Docker installation completed!"
     return 0
 }
 
@@ -327,6 +370,7 @@ $c_dom_name
 EOF
 
     success "Docker compose file created at $INSTALL_DIR/"
+    log_success "Docker compose file created at $INSTALL_DIR/"
     return 0
 }
 
@@ -344,13 +388,18 @@ add_header_to_caddy() {
     }
 }
 EOF
-    local temp_caddyfile=$(mktemp)
+    local temp_caddyfile=$(mktemp) || {
+        error "Failed to create temporary file"
+        log_error "Failed to create temporary file"
+        return 1
+    }
     printf "%s\n" "$caddy_header" > "$temp_caddyfile"
     if [ -f "$file_to_add" ]; then
         sudo cat "$file_to_add" >> "$temp_caddyfile"
     fi
     sudo mv "$temp_caddyfile" "$file_to_add"
     success "Header added to $file_to_add!"
+    log_success "Header added to $file_to_add!"
     return 0
 }
 
@@ -367,12 +416,14 @@ configure_caddy() {
     log_info "Creating Caddyfile configuration..."
     if [ -f "$CADDYFILE" ]; then
         success "$CADDYFILE exists"
+        log_success "$CADDYFILE exists"
         info "Looking for the header..."
         log_info "Looking for the header..."
         if ! sudo grep -q "proxy_protocol" "$CADDYFILE" 2>/dev/null; then
             add_header_to_caddy "$CADDYFILE"
         else
             success "Caddy header found!"
+            log_success "Caddy header found!"
         fi
     else
         info "$CADDYFILE not found, creating new one..."
@@ -415,6 +466,7 @@ $dom_name:$redirect_port {
 }
 EOF
     success "Caddyfile created at $INSTALL_DIR/Caddyfile"
+    log_success "Caddyfile created at $INSTALL_DIR/Caddyfile"
 
     return 0
 }
@@ -434,21 +486,23 @@ configure_3xui_panel() {
     restart_function() {
         info "Restarting 3X-UI panel..."
         log_info "Restarting 3X-UI panel..."
-        curl -s --fail -b "$cookie_file" -X POST \
+        curl -s --fail --max-time 10 -b "$cookie_file" -X POST \
             "$base_url/panel/setting/restartPanel" \
             > "$temp_output"
 
         if grep -Eq '"success":\s*true|successfully' "$temp_output"; then
             success "Restarted successfully!"
+            log_success "Restarted successfully!"
         else
             warn "Could not restart panel, further commands may fail..."
+            log_warn "Could not restart panel, further commands may fail..."
         fi
     }
 
     login_function() {
         local login_username="$1"
         local login_password="$2"
-        curl -s --fail -c "$cookie_file" -X POST \
+        curl -s --fail --max-time 10 -c "$cookie_file" -X POST \
             "$base_url/login" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "username=$login_username&password=$login_password" \
@@ -456,10 +510,12 @@ configure_3xui_panel() {
 
         if ! grep -Eq '"success":\s*true|successfully' "$temp_output"; then
             warn "Failed to login to 3X-UI panel"
+            log_warn "Failed to login to 3X-UI panel"
             rm -f "$cookie_file"
             return 1
         else
             success "Logged in successfully ($login_username/$login_password)!"
+            log_success "Logged in successfully ($login_username/$login_password)!"
             return 0
         fi
     }
@@ -474,8 +530,9 @@ configure_3xui_panel() {
     while [ $attempt -lt $max_attempts ]; do
         info "Attempt: $((attempt+1))/$max_attempts..."
         log_info "Attempt: $((attempt+1))/$max_attempts..."
-        if curl -s --fail "$base_url" >/dev/null 2>&1; then
+        if curl -s --fail --max-time 5 "$base_url" >/dev/null 2>&1; then
             success "3X-UI is responding!"
+            log_success "3X-UI is responding!"
             break
         fi
         attempt=$((attempt+1))
@@ -483,22 +540,24 @@ configure_3xui_panel() {
     done
 
     if [ $attempt -eq $max_attempts ]; then
-        warn "Could not verify 3X-UI is ready. Configration may fail."
+        warn "Could not verify 3X-UI is ready. Configuration may fail."
+        log_warn "Could not verify 3X-UI is ready. Configuration may fail."
         return 1
     fi
 
     sleep 2
 
-    info "Loggin in to 3X-UI panel..."
-    log_info "Loggin in to 3X-UI panel..."
+    info "Logging in to 3X-UI panel..."
+    log_info "Logging in to 3X-UI panel..."
     if ! login_function "admin" "admin"; then
         error "Initial login with (admin/admin) failed. Aborting..."
+        log_error "Initial login with (admin/admin) failed. Aborting..."
         return 1
     fi
 
     info "Updating admin credentials..."
     log_info "Updating admin credentials..."
-    curl -s --fail -b "$cookie_file" -X POST                                                 \
+    curl -s --fail --max-time 10 -b "$cookie_file" -X POST                                  \
         "$base_url/panel/setting/updateUser"                                                 \
         -H "Content-Type: application/x-www-form-urlencoded"                                 \
         -d "oldUsername=admin&oldPassword=admin&newUsername=$username&newPassword=$password" \
@@ -506,20 +565,23 @@ configure_3xui_panel() {
 
     if grep -Eq '"success":\s*true|successfully' "$temp_output"; then
         success "Admin credentials updated!"
+        log_success "Admin credentials updated!"
     else
         warn "Could not update credentials automatically."
+        log_warn "Could not update credentials automatically."
     fi
 
     restart_function
 
     if ! login_function "$username" "$password"; then
         error "Login with updated credentials failed. Aborting..."
+        log_error "Login with updated credentials failed. Aborting..."
         return 1
     fi
 
     info "Updating panel port to $port and path to /$route..."
     log_info "Updating panel port to $port and path to /$route..."
-    curl -s --fail -b "$cookie_file" -X POST \
+    curl -s --fail --max-time 10 -b "$cookie_file" -X POST \
         "$base_url/panel/setting/update"                                            \
         -H "Content-Type: application/x-www-form-urlencoded"                        \
         -d "webPort=$port&subPort=2096&webBasePath=/$route&webCertFile=&webKeyFile="\
@@ -527,8 +589,10 @@ configure_3xui_panel() {
 
     if grep -Eq 'The parameters have been changed' "$temp_output"; then
         success "Panel settings updated!"
+        log_success "Panel settings updated!"
     else
         warn "Could not update panel settings automatically"
+        log_warn "Could not update panel settings automatically"
         rm -f "$cookie_file"
         return 1
     fi
@@ -542,8 +606,9 @@ configure_3xui_panel() {
     while [ $verify_attempts -lt 10 ]; do
         info "Attempt: $((verify_attempts+1))"
         log_info "Attempt: $((verify_attempts+1))"
-        if curl -s --fail "http://localhost:$port/$route" >/dev/null 2>&1; then
+        if curl -s --fail --max-time 5 "http://localhost:$port/$route" >/dev/null 2>&1; then
             success "Panel is accessible on new port $port!"
+            log_success "Panel is accessible on new port $port!"
             return 0
         fi
         verify_attempts=$((verify_attempts+1))
@@ -551,6 +616,7 @@ configure_3xui_panel() {
     done
 
     warn "Could not verify panel on new port, but settings were applied."
+    log_warn "Could not verify panel on new port, but settings were applied."
     return 0
 }
 
@@ -562,6 +628,7 @@ caddy_install() {
 
     if command -v caddy &> /dev/null; then
         success "Caddy is already installed: $(caddy version)"
+        log_success "Caddy is already installed: $(caddy version)"
     else
         info "Installing Caddy..."
         log_info "Installing Caddy..."
@@ -571,9 +638,9 @@ caddy_install() {
 
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 
-        chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>/dev/null || true
 
-        chmod o+r /etc/apt/sources.list.d/caddy-stable.list
+        sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list 2>/dev/null || true
 
         info "Deleting default Caddyfile..."
         log_info "Deleting default Caddyfile..."
@@ -583,6 +650,7 @@ caddy_install() {
         sudo apt install -y caddy
 
         success "Caddy installed!"
+        log_success "Caddy installed!"
     fi
 
     info "Configuring Caddy reverse proxy..."
@@ -606,6 +674,7 @@ caddy_install() {
 
     if [ "$PASSWORD" == "admin" ]; then
         warn "Using default password. Consider changing later!"
+        log_warn "Using default password. Consider changing later!"
     fi
 
     HASH_PW=$(caddy hash-password --plaintext "$PASSWORD")
@@ -653,6 +722,7 @@ caddy_install() {
 
         if sudo grep -qE "^$dom_name(:|[[:space:]]|\{|$)" "$CADDYFILE"; then
             warn "Domain $dom_name already exists in Cadyfile."
+            log_warn "Domain $dom_name already exists in Cadyfile."
             echo ""
             read -p "Overwrite existing configuration for $dom_name? [y/N]: " OVERWRITE
             if [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
@@ -690,6 +760,7 @@ caddy_install() {
                     sudo mv /tmp/Caddyfile.tmp "$CADDYFILE"
                 else
                     error "Failed to remove old configuration - backup reserved."
+                    log_error "Failed to remove old configuration - backup reserved."
                     sudo rm -f /tmp/Caddyfile.tmp
                 fi
 
@@ -698,10 +769,14 @@ caddy_install() {
                 echo "" | sudo tee -a "$CADDYFILE"
                 sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a "$CADDYFILE"
                 success "Configuration for $dom_name appended to Caddyfile!"
+                log_success "Configuration for $dom_name appended to Caddyfile!"
             else
                 warn "Keeping existing configuration."
+                log_warn "Keeping existing configuration."
                 warn "New config saved to: $INSTALL_DIR/Caddyfile."
+                log_warn "New config saved to: $INSTALL_DIR/Caddyfile."
                 warn "You can manually merge configurations if needed."
+                log_warn "You can manually merge configurations if needed."
             fi
         else
             info "Domain not found in existing Caddyfile, appending..."
@@ -709,11 +784,13 @@ caddy_install() {
             local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
             sudo cp "$CADDYFILE" "$backup_file"
             success "Backup created: $backup_file"
+            log_success "Backup created: $backup_file"
 
             echo "" | sudo tee -a "$CADDYFILE"
             echo "# 3X-UI Configuration for $dom_name - Added $(date +%s)" | sudo tee -a "$CADDYFILE"
             sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a "$CADDYFILE"
             success "Configuration appended to existing Caddyfile!"
+            log_success "Configuration appended to existing Caddyfile!"
         fi
     else
         info "No existing Caddyfile found, creating new one..."
@@ -721,18 +798,23 @@ caddy_install() {
         sudo mkdir -p /etc/caddy
         sudo cp $INSTALL_DIR/Caddyfile "$CADDYFILE"
         success "New Caddyfile created!"
+        log_success "New Caddyfile created!"
     fi
 
     info "Testing Caddy configuration..."
     log_info "Testing Caddy configuration..."
     if sudo caddy fmt --overwrite "$CADDYFILE"; then
         success "FMT --overwrite"
+        log_success "FMT --overwrite"
     fi
     if sudo caddy validate --config "$CADDYFILE"; then
         success "Caddy configuration is valid!"
+        log_success "Caddy configuration is valid!"
     else
         error "Caddy configuration validation failed!"
+        log_error "Caddy configuration validation failed!"
         error "Check the configuration at $CADDYFILE"
+        log_error "Check the configuration at $CADDYFILE"
         echo ""
 
         if ls /etc/caddy/Caddyfile.backup.* 1>/dev/null 2>&1; then
@@ -744,9 +826,12 @@ caddy_install() {
             if [[ "$restore_backup" =~ ^[Yy]$ ]]; then
                 sudo cp "$latest_backup" "$CADDYFILE"
                 success "Backup restored: $latest_backup"
+                log_success "Backup restored: $latest_backup"
             else
                 warn "Manual restoration command: "
+                log_warn "Manual restoration command: "
                 warn "sudo cp $latest_backup $CADDYFILE"
+                log_warn "sudo cp $latest_backup $CADDYFILE"
             fi
         fi
     fi
@@ -759,6 +844,7 @@ caddy_install() {
 
     if systemctl is-active --quiet caddy; then
         success "Caddy is running!"
+        log_success "Caddy is running!"
         echo ""
 
         if configure_3xui_panel "$BE_PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD"; then
@@ -777,6 +863,7 @@ caddy_install() {
             echo -e "${red}${bld}!ATTENTION! - MANUAL SETUP REQUIRED${noc}"
             echo ""
             warn "Automatic configuration failed. Please complete these steps manually:"
+            log_warn "Automatic configuration failed. Please complete these steps manually:"
             echo ""
             echo -e "${yel}Step-by-step instructions:${noc}"
             echo ""
@@ -809,6 +896,7 @@ caddy_install() {
         fi
     else
         error "Caddy failed to start!"
+        log_error "Caddy failed to start!"
         sudo journalctl -u caddy -n 50 --no-pager
         exit 1
     fi
@@ -818,6 +906,7 @@ caddy_install() {
 
 main() {
     clear
+    log_init
     banner "═══════════════════════════════════════════════════════════"
     banner "            3X-UI Automated Installer v2.2"
     banner "═══════════════════════════════════════════════════════════"
@@ -832,14 +921,17 @@ main() {
                 log_info "Docker was installed. Checking group membership..."
                 if ! groups $USER | grep -q "docker"; then
                     error "User still not in docker group. Please log out/reboot and try again."
+                    log_error "User still not in docker group. Please log out/reboot and try again."
                     sudo usermod -aG docker $USER
                     exit 1
                 fi
                 if ! docker info >/dev/null 2>&1; then
                     error "Cannot connect to Docker. Please log out/reboot and try again."
+                    log_error "Cannot connect to Docker. Please log out/reboot and try again."
                     exit 1
                 fi
                 success "Docker access confirmed! Continuing..."
+                log_success "Docker access confirmed! Continuing..."
                 clear_state
                 ;;
         esac
@@ -851,6 +943,7 @@ main() {
     if [ ! -d "$INSTALL_DIR" ]; then
         mkdir -p "$INSTALL_DIR"
         success "Created installation directory: $INSTALL_DIR"
+        log_success "Created installation directory: $INSTALL_DIR"
     fi
 
     cd "$INSTALL_DIR"
@@ -870,9 +963,11 @@ main() {
                 log_info "Testing DNS resolution for $DOM_NAME..."
                 if host "$DOM_NAME" >/dev/null 2>&1; then
                     success "Domain $DOM_NAME resolves successfully!"
+                    log_success "Domain $DOM_NAME resolves successfully!"
                     break
                 else
                     warn "Domain $DOM_NAME does not resolve to an IP yet."
+                    log_warn "Domain $DOM_NAME does not resolve to an IP yet."
                     read -p "Continue anyway? [y/N]: " CONTINUE
                     if [[ "$CONTINUE" =~ ^[Yy]$ ]]; then
                         break
@@ -892,10 +987,21 @@ main() {
 
     info "Starting 3X-UI container..."
     log_info "Starting 3X-UI container..."
-    cd "$INSTALL_DIR"
+    if [ ! -f "$INSTALL_DIR/compose.yml" ]; then
+        error "compose.yml not found in $INSTALL_DIR"
+        log_error "compose.yml not found in $INSTALL_DIR"
+        exit 1
+    fi
+
+    cd "$INSTALL_DIR" || {
+        error "Failed to change directory to $INSTALL_DIR"
+        log_error "Failed to change directory to $INSTALL_DIR"
+        exit 1
+    }
 
     if docker compose up -d; then
         success "3X-UI container started!"
+        log_success "3X-UI container started!"
 
         info "Waiting for 3X-UI to be ready..."
         log_info "Waiting for 3X-UI to be ready..."
@@ -903,13 +1009,16 @@ main() {
 
         if docker ps | grep -q "$CONTAINER_NAME"; then
             success "3X-UI container is running!"
+            log_success "3X-UI container is running!"
         else
             error "3X-UI container failed to start!"
+            log_error "3X-UI container failed to start!"
             docker logs "$CONTAINER_NAME"
             exit 1
         fi
     else
         error "Failed to start 3X-UI container!"
+        log_error "Failed to start 3X-UI container!"
         exit 1
     fi
 
@@ -923,6 +1032,7 @@ main() {
             caddy_install "$DOM_NAME"
         else
             warn "Skipping Caddy setup."
+            log_warn "Skipping Caddy setup."
             info "Access 3X-UI at: http://$DOM_NAME:2053"
             log_info "Access 3X-UI at: http://$DOM_NAME:2053"
             info "Default credential: admin / admin"
@@ -931,20 +1041,29 @@ main() {
     else
         PUB_IP=$(get_public_ip)
         warn "═══════════════════════════════════════════════════════════"
+        log_warn "═══════════════════════════════════════════════════════════"
         warn "No domain configured - HTTPS not available"
+        log_warn "No domain configured - HTTPS not available"
         warn "═══════════════════════════════════════════════════════════"
+        log_warn "═══════════════════════════════════════════════════════════"
         echo -e "${grn}Panel URL:${noc}     http://$PUB_IP:2053"
         echo -e "${grn}Default Login:${noc} admin / admin"
         warn "═══════════════════════════════════════════════════════════"
+        log_warn "═══════════════════════════════════════════════════════════"
         warn "IMPORTANT: Change default credentials after first login!"
+        log_warn "IMPORTANT: Change default credentials after first login!"
         warn "═══════════════════════════════════════════════════════════"
+        log_warn "═══════════════════════════════════════════════════════════"
     fi
 
     echo ""
 
     success "═══════════════════════════════════════════════════════════"
+    log_success "═══════════════════════════════════════════════════════════"
     success "            Installation completed successfully"
+    log_success "            Installation completed successfully"
     success "═══════════════════════════════════════════════════════════"
+    log_success "═══════════════════════════════════════════════════════════"
     echo ""
     info "Installation directory: $INSTALL_DIR"
     log_info "Installation directory: $INSTALL_DIR"
