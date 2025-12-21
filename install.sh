@@ -34,12 +34,14 @@ print_line() {
         "$symbol" "$msg" "$dots" "$symbol" >&"$out_stream"
 }
 
+# logging to the terminal
 info()    { print_line "i" "$blu" "$1"       ;  }
 success() { print_line "✓" "$grn" "$1"       ;  }
 warn()    { print_line "!" "$yel" "$1"       ;  }
 error()   { print_line "X" "$red" "$1" 2     ;  }
 banner()    { echo -e "${cyn}${bld}$1${noc}" ;  }
 
+# loggin into logfile
 log_info()      { echo "[ INFO ]  $1" >> "$LOG_FILE";       }
 log_success()   { echo "[SUCCESS] $1" >> "$LOG_FILE"       &&
                   echo ""             >> "$LOG_FILE";       }
@@ -56,7 +58,7 @@ readonly CONTAINER_NAME="3xui_app_$$"
 # Initialize log file
 log_init() {
     echo "====================================" >  "$LOG_FILE"
-    echo "# Log file created at $(date +%s)"    >> "$LOG_FILE"
+    echo "# Log file created at $(date)"    >> "$LOG_FILE"
     echo "====================================" >> "$LOG_FILE"
     chmod 600 "$LOG_FILE"
 }

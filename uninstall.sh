@@ -701,8 +701,6 @@ purge_everything() {
 # ───────────────────────────────
 show_usage() {
     cat << EOF
-Usage: $0 [OPTIONS]
-
 3X-UI Complete Uninstaller - Removes Docker, Caddy, and all related configurations
 
 OPTIONS:
