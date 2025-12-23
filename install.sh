@@ -815,7 +815,7 @@ caddy_install() {
             log_success "Backup created: $backup_file"
 
             echo "" | sudo tee -a "$CADDYFILE"
-            echo "# 3X-UI Configuration for $dom_name - Added $(date +%s)" | sudo tee -a "$CADDYFILE"
+            echo "# 3X-UI Configuration for $dom_name - Added $(date)" | sudo tee -a "$CADDYFILE"
             sudo cat "$INSTALL_DIR/Caddyfile" | sudo tee -a "$CADDYFILE"
             success "Configuration appended to existing Caddyfile!"
             log_success "Configuration appended to existing Caddyfile!"
