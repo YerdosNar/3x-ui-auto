@@ -19,7 +19,7 @@
 ### One-Liner Installation
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/one_liner.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/install.sh)
 ```
 
 ### Modular Installation (Recommended)
