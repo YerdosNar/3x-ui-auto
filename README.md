@@ -264,6 +264,7 @@ This project is released under the [GPL-v3 License](LICENSE)
 - [3X-UI Panel](https://github.com/mhsanaei/3x-ui) - Original panel
 - [Caddy](https://caddyserver.com/) - Reverse proxy server
 - [Docker](https://www.docker.com/) - Container platform
+- [WhiteList](https://github.com/hxehex/russia-mobile-internet-whitelist.git) - Internet Whitelist for Russian ISPs
 
 ---
 
