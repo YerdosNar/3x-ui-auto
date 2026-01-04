@@ -400,37 +400,6 @@ EOF
     return 0
 }
 
-add_header_to_caddy() {
-    local file_to_add="$1"
-    info "Adding header to $file_to_add"
-    log_info "Adding header to $file_to_add"
-    read -r -d '' caddy_header <<'EOF'
-{
-    servers {
-        listener_wrappers {
-            proxy_protocol {
-                timeout 2s
-                allow 127.0.0.1/8
-            }
-        }
-    }
-}
-EOF
-    local temp_caddyfile=$(mktemp) || {
-        error "Failed to create temporary file"
-        log_error "Failed to create temporary file"
-        return 1
-    }
-    printf "%s\n" "$caddy_header" > "$temp_caddyfile"
-    if [ -f "$file_to_add" ]; then
-        sudo cat "$file_to_add" >> "$temp_caddyfile"
-    fi
-    sudo mv "$temp_caddyfile" "$file_to_add"
-    success "Header added to $file_to_add!"
-    log_success "Header added to $file_to_add!"
-    return 0
-}
-
 configure_caddy() {
     local dom_name="$1"
     local route="$2"
@@ -445,18 +414,9 @@ configure_caddy() {
     if [ -f "$CADDYFILE" ]; then
         success "$CADDYFILE exists"
         log_success "$CADDYFILE exists"
-        info "Looking for the header..."
-        log_info "Looking for the header..."
-        if ! sudo grep -q "proxy_protocol" "$CADDYFILE" 2>/dev/null; then
-            add_header_to_caddy "$CADDYFILE"
-        else
-            success "Caddy header found!"
-            log_success "Caddy header found!"
-        fi
     else
         info "$CADDYFILE not found, creating new one..."
         log_info "$CADDYFILE not found, creating new one..."
-        add_header_to_caddy "$INSTALL_DIR/Caddyfile"
     fi
 
     cat >> "$INSTALL_DIR/Caddyfile" <<EOF
