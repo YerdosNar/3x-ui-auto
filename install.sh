@@ -608,6 +608,57 @@ configure_3xui_panel() {
     return 0
 }
 
+open_browser() {
+    local port="$1"
+    local route="$2"
+    local dom_name="$5"
+
+    info "Finding SSH port..."
+    log_info "Finding SSH port..."
+    local ssh_port=$(grep -i "^Port" /etc/ssh/sshd_config | awk '{print $2}')
+    success "SSH Port: $ssh_port"
+    log_success "SSH Port: $ssh_port"
+
+    ssh -p "$ssh_port" -L 8080:localhost:2053 "$USER"@"$dom_name"
+
+    echo ""
+    echo -e "${red}${bld}!ATTENTION! - MANUAL SETUP REQUIRED${noc}"
+    echo ""
+    warn "Automatic configuration failed. Please complete these steps manually:"
+    log_warn "Automatic configuration failed. Please complete these steps manually:"
+    echo ""
+    echo -e "${yel}Step-by-step instructions:${noc}"
+    echo ""
+    echo -e "  1. Open: ${cyn}http://$dom_name:8080${noc}"
+    echo -e "  2. Login with default credentials: ${grn}admin${noc} / ${grn}admin${noc}"
+    echo -e "  3. Navigate to: ${yel}Authentication${noc}"
+    echo -e "  4. Enter ${yel}Current Username${noc}: ${blu}admin${noc}"
+    echo -e "  5. Enter ${yel}Current Password${noc}: ${blu}admin${noc}"
+    echo -e "  6. Enter ${yel}New Username${noc}: ${blu}$ADMIN_NAME${noc}"
+    echo -e "  7. Enter ${yel}New Password${noc}: ${blu}$PASSWORD${noc}"
+    echo -e "  8. Click ${blu}Save${noc}"
+    echo -e "  9. Navigate to: ${yel}Panel Settings${noc}"
+    echo -e " 10. Change ${yel}Listen Port${noc} to: ${blu}$port${noc}"
+    echo -e " 11. Change ${yel}URI Path${noc} to: ${blu}/$route${noc}"
+    echo -e " 12. Click ${blu}Save${noc}"
+    echo -e " 13. Click ${blu}Restart Panel${noc}"
+    echo ""
+    echo -e "${yel}Note: The panel will close after restart.${noc}"
+    echo ""
+    read -p "Press ${yel}ENTER${noc} after completing these steps and the panel has restarted."
+    echo ""
+    banner "═══════════════════════════════════════════════════════════"
+    banner "                  3X-UI Panel Access Information"
+    banner "═══════════════════════════════════════════════════════════"
+    echo -e "${grn}Panel URL:${noc}     https://$dom_name:$port/$route"
+    echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
+    echo -e "${grn}Password:${noc}      $PASSWORD"
+    echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
+    banner "═══════════════════════════════════════════════════════════"
+
+    return 0
+}
+
 caddy_install() {
     local dom_name="$1"
 
@@ -699,8 +750,6 @@ caddy_install() {
             break
         fi
     done
-
-    configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT" "$REDIRECT_PORT"
 
     info "Installing Caddyfile..."
     log_info "Installing Caddyfile..."
@@ -838,53 +887,74 @@ caddy_install() {
         log_success "Caddy is running!"
         echo ""
 
-        if configure_3xui_panel "$BE_PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD"; then
-            sudo systemctl restart caddy
-            echo ""
-            banner "═══════════════════════════════════════════════════════════"
-            banner "    ✓ 3X-UI Panel Configured Automatically!"
-            banner "═══════════════════════════════════════════════════════════"
-            echo -e "${grn}Panel URL:${noc}     https://$dom_name:$REDIRECT_PORT/$ROUTE"
-            echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
-            echo -e "${grn}Password:${noc}      $PASSWORD"
-            echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
-            banner "═══════════════════════════════════════════════════════════"
+        echo "You can configure by opening browser:"
+        echo "  Open 'http://localhost:8080'"
+        echo ""
+        echo "Or we can configure for you (NOT RECOMMENDED)"
+        local auto_or_browser
+        read -p "${bld}${cyn}A${noc}utoconfigure/${bld}${cyn}C${noc}onfigure by yourself [a/C]: " auto_or_browser
+        if [[ "$auto_or_browser" =~ ^[Aa]$ ]]; then
+            if configure_3xui_panel "$BE_PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD"; then
+                sudo systemctl restart caddy
+                echo ""
+                banner "═══════════════════════════════════════════════════════════"
+                banner "    ✓ 3X-UI Panel Configured Automatically!"
+                banner "═══════════════════════════════════════════════════════════"
+                echo -e "${grn}Panel URL:${noc}     https://$dom_name:$REDIRECT_PORT/$ROUTE"
+                echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
+                echo -e "${grn}Password:${noc}      $PASSWORD"
+                echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
+                banner "═══════════════════════════════════════════════════════════"
+            else
+                echo ""
+                echo -e "${red}${bld}!ATTENTION! - MANUAL SETUP REQUIRED${noc}"
+                echo ""
+                warn "Automatic configuration failed. Please complete these steps manually:"
+                log_warn "Automatic configuration failed. Please complete these steps manually:"
+                echo ""
+                echo -e "${yel}Step-by-step instructions:${noc}"
+                echo ""
+                echo -e "  1. Open: ${cyn}https://$dom_name:2053${noc}"
+                echo -e "  2. Login with default credentials: ${grn}admin${noc} / ${grn}admin${noc}"
+                echo -e "  3. Navigate to: ${yel}Panel Settings${noc}"
+                echo -e "  4. Change ${yel}Listen Port${noc} to: ${blu}$PORT${noc}"
+                echo -e "  5. Change ${yel}URI Path${noc} to: ${blu}/$ROUTE${noc}"
+                echo -e "  6. Click ${blu}Save${noc}"
+                echo -e "  7. Navigate to: ${yel}Authentication${noc}"
+                echo -e "  8. Enter ${yel}Current Username${noc}: ${blu}admin${noc}"
+                echo -e "  9. Enter ${yel}Current Password${noc}: ${blu}admin${noc}"
+                echo -e " 10. Enter ${yel}New Username${noc}: ${blu}$ADMIN_NAME${noc}"
+                echo -e " 11. Enter ${yel}New Password${noc}: ${blu}$PASSWORD${noc}"
+                echo -e " 12. Click ${blu}Save${noc}"
+                echo -e " 13. Click ${blu}Restart Panel${noc}"
+                echo ""
+                echo -e "${yel}Note: The panel will close after restart.${noc}"
+                echo ""
+                read -p "Press ${yel}ENTER${noc} after completing these steps and the panel has restarted."
+                echo ""
+                banner "═══════════════════════════════════════════════════════════"
+                banner "                  3X-UI Panel Access Information"
+                banner "═══════════════════════════════════════════════════════════"
+                echo -e "${grn}Panel URL:${noc}     https://$dom_name:$REDIRECT_PORT/$ROUTE"
+                echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
+                echo -e "${grn}Password:${noc}      $PASSWORD"
+                echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
+                banner "═══════════════════════════════════════════════════════════"
+            fi
         else
-            echo ""
-            echo -e "${red}${bld}!ATTENTION! - MANUAL SETUP REQUIRED${noc}"
-            echo ""
-            warn "Automatic configuration failed. Please complete these steps manually:"
-            log_warn "Automatic configuration failed. Please complete these steps manually:"
-            echo ""
-            echo -e "${yel}Step-by-step instructions:${noc}"
-            echo ""
-            echo -e "  1. Open: ${cyn}https://$dom_name:2053${noc}"
-            echo -e "  2. Login with default credentials: ${grn}admin${noc} / ${grn}admin${noc}"
-            echo -e "  3. Navigate to: ${yel}Panel Settings${noc}"
-            echo -e "  4. Change ${yel}Listen Port${noc} to: ${blu}$PORT${noc}"
-            echo -e "  5. Change ${yel}URI Path${noc} to: ${blu}/$ROUTE${noc}"
-            echo -e "  6. Click ${blu}Save${noc}"
-            echo -e "  7. Navigate to: ${yel}Authentication${noc}"
-            echo -e "  8. Enter ${yel}Current Username${noc}: ${blu}admin${noc}"
-            echo -e "  9. Enter ${yel}Current Password${noc}: ${blu}admin${noc}"
-            echo -e " 10. Enter ${yel}New Username${noc}: ${blu}$ADMIN_NAME${noc}"
-            echo -e " 11. Enter ${yel}New Password${noc}: ${blu}$PASSWORD${noc}"
-            echo -e " 12. Click ${blu}Save${noc}"
-            echo -e " 13. Click ${blu}Restart Panel${noc}"
-            echo ""
-            echo -e "${yel}Note: The panel will close after restart.${noc}"
-            echo ""
-            read -p "Press ${yel}ENTER${noc} after completing these steps and the panel has restarted."
-            echo ""
-            banner "═══════════════════════════════════════════════════════════"
-            banner "                  3X-UI Panel Access Information"
-            banner "═══════════════════════════════════════════════════════════"
-            echo -e "${grn}Panel URL:${noc}     https://$dom_name:$REDIRECT_PORT/$ROUTE"
-            echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
-            echo -e "${grn}Password:${noc}      $PASSWORD"
-            echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
-            banner "═══════════════════════════════════════════════════════════"
-        fi
+            if open_browser "$BE_PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD" "$dom_name"; then
+                sudo systemctl restart caddy
+                echo ""
+                banner "═══════════════════════════════════════════════════════════"
+                banner "    ✓ 3X-UI Panel Configured Automatically!"
+                banner "═══════════════════════════════════════════════════════════"
+                echo -e "${grn}Panel URL:${noc}     https://$dom_name:$REDIRECT_PORT/$ROUTE"
+            fi
+                echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
+                echo -e "${grn}Password:${noc}      $PASSWORD"
+                echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
+                banner "═══════════════════════════════════════════════════════════"
+
     else
         error "Caddy failed to start!"
         log_error "Caddy failed to start!"
