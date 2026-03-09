@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-readonly noc="\033[0m"
-readonly red="\033[31m"
-readonly grn="\033[32m"
-readonly yel="\033[33m"
-readonly blu="\033[34m"
-readonly cyn="\033[36m"
-readonly bld="\033[1m"
+readonly noc=$'\033[0m'
+readonly red=$'\033[31m'
+readonly grn=$'\033[32m'
+readonly yel=$'\033[33m'
+readonly blu=$'\033[34m'
+readonly cyn=$'\033[36m'
+readonly bld=$'\033[1m'
 
-WIDTH=$(tput cols)
+WIDTH=$(tput cols 2>/dev/null || echo 80)
 [ "$WIDTH" -gt 90 ] && WIDTH=85
 
 # Logic to truncate and pad
@@ -51,9 +51,9 @@ log_banner()    { echo "[BANNER ] $1" >> "$LOG_FILE";       }
 
 readonly STATE_FILE="/tmp/.3xui_state"
 readonly LOG_FILE="/tmp/.3xui_log_$$"
-readonly INSTALL_DIR="$HOME/3x-ui_$$"
+readonly INSTALL_DIR="$HOME/3x-ui"
 readonly CADDYFILE="/etc/caddy/Caddyfile"
-readonly CONTAINER_NAME="3xui_app_$$"
+readonly CONTAINER_NAME="3xui_app"
 
 # Initialize log file
 log_init() {
@@ -85,6 +85,7 @@ load_state() {
     info "Loading state..."
     log_info "Loading state..."
     if [ -f "$STATE_FILE" ]; then
+        # shellcheck source=/dev/null
         source "$STATE_FILE"
         success "State loaded!"
         log_success "State loaded!"
@@ -196,7 +197,8 @@ check_requirements() {
         exit 1
     fi
 
-    local available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
+    local available_space
+    available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
     if [ "$available_space" -lt 2 ]; then
         error "Insufficient disk space."
         log_error "Insufficient disk space."
@@ -235,12 +237,12 @@ docker_install() {
 
     info "Removing old Docker..."
     log_info "Removing old Docker..."
-    sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) >> "$LOG_FILE" 2>&1 || true
+    sudo apt-get remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) 2>&1 | tee -a "$LOG_FILE" >/dev/null || true
 
     info "Updating system packages..."
     log_info "Updating system packages..."
-    sudo apt-get update -y >> "$LOG_FILE" 2>&1
-    sudo apt-get install -y ca-certificates curl gnupg lsb-release >> "$LOG_FILE" 2>&1
+    sudo apt-get update -y 2>&1 | tee -a "$LOG_FILE" >/dev/null
+    sudo apt-get install -y ca-certificates curl gnupg lsb-release 2>&1 | tee -a "$LOG_FILE" >/dev/null
 
     info "Setting up Docker repository..."
     log_info "Setting up Docker repository..."
@@ -265,11 +267,11 @@ EOF
 
     info "Updating the system..."
     log_info "Updating the system..."
-    sudo apt update >> "$LOG_FILE" 2>&1
+    sudo apt-get update 2>&1 | tee -a "$LOG_FILE" >/dev/null
 
     info "Installing Docker..."
     log_info "Installing Docker..."
-    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >> "$LOG_FILE" 2>&1
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin 2>&1 | tee -a "$LOG_FILE" >/dev/null
 
     success "Docker installation finished!"
     log_success "Docker installation finished!"
@@ -321,8 +323,6 @@ EOF
             echo ""
             echo -e "Press ${yel}ENTER${noc} to logout now (or Ctrl+C to cancel)..."
             read
-            clear_state
-
             if [ -n "${SSH_CONNECTION:-}" ]; then
                 kill -HUP "$PPID"
             else
@@ -339,11 +339,10 @@ EOF
             read -p "Reboot now? [Y/n]: " REBOOT
             REBOOT=${REBOOT:-Y}
             if [[ "$REBOOT" =~ ^[Yy]$ ]]; then
-                clear_state
                 sudo reboot
             else
-                warn "Please reboot manually ad run the script again."
-                log_warn "Please reboot manually ad run the script again."
+                warn "Please reboot manually and run the script again."
+                log_warn "Please reboot manually and run the script again."
                 exit 0
             fi
         fi
@@ -419,8 +418,7 @@ configure_caddy() {
         log_info "$CADDYFILE not found, creating new one..."
     fi
 
-    cat >> "$INSTALL_DIR/Caddyfile" <<EOF
-
+    cat > "$INSTALL_DIR/Caddyfile" <<EOF
 $dom_name:$redirect_port {
     encode gzip
 
@@ -468,8 +466,6 @@ configure_3xui_panel() {
     local temp_output="/tmp/3xui_output_$$.txt"
     local cookie_file="/tmp/3xui_cookies_$$.txt"
     local base_url="http://localhost:2053"
-
-    trap 'rm -rf "$temp_output" "$cookie_file"' EXIT
 
     restart_function() {
         info "Restarting 3X-UI panel..."
@@ -611,25 +607,28 @@ configure_3xui_panel() {
 open_browser() {
     local port="$1"
     local route="$2"
+    local admin_name="$3"
+    local password="$4"
     local dom_name="$5"
 
     info "Finding SSH port..."
     log_info "Finding SSH port..."
-    local ssh_port=$(grep -i "^Port" /etc/ssh/sshd_config | awk '{print $2}')
+    local ssh_port
+    ssh_port=$(grep -i "^Port" /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
+    ssh_port=${ssh_port:-22}
     success "SSH Port: $ssh_port"
     log_success "SSH Port: $ssh_port"
 
-    ssh -p "$ssh_port" -L 8080:localhost:2053 "$USER"@"$dom_name"
-
     echo ""
-    echo -e "${red}${bld}!ATTENTION! - MANUAL SETUP REQUIRED${noc}"
+    echo -e "${red}${bld}MANUAL SETUP REQUIRED${noc}"
     echo ""
-    warn "Automatic configuration failed. Please complete these steps manually:"
-    log_warn "Automatic configuration failed. Please complete these steps manually:"
+    echo -e "${yel}First, create an SSH tunnel from your LOCAL machine:${noc}"
     echo ""
-    echo -e "${yel}Step-by-step instructions:${noc}"
+    echo -e "  ${cyn}ssh -p $ssh_port -L 8080:localhost:2053 $USER@$dom_name${noc}"
     echo ""
-    echo -e "  1. Open: ${cyn}http://$dom_name:8080${noc}"
+    echo -e "${yel}Then follow these steps in your browser(ORDER MATTERS):${noc}"
+    echo ""
+    echo -e "  1. Open: ${cyn}http://localhost:8080${noc}"
     echo -e "  2. Login with default credentials: ${grn}admin${noc} / ${grn}admin${noc}"
     echo -e "  3. Navigate to: ${yel}Authentication${noc}"
     echo -e "  4. Enter ${yel}Current Username${noc}: ${blu}admin${noc}"
@@ -643,18 +642,11 @@ open_browser() {
     echo -e " 12. Click ${blu}Save${noc}"
     echo -e " 13. Click ${blu}Restart Panel${noc}"
     echo ""
-    echo -e "${yel}Note: The panel will close after restart.${noc}"
+    echo -e "${yel}Note: The panel will close after restart. Close the SSH tunnel after.${noc}"
     echo ""
-    read -p "Press ${yel}ENTER${noc} after completing these steps and the panel has restarted."
+    echo -ne "Press ${yel}ENTER${noc} after completing these steps and the panel has restarted. "
+    read
     echo ""
-    banner "═══════════════════════════════════════════════════════════"
-    banner "                  3X-UI Panel Access Information"
-    banner "═══════════════════════════════════════════════════════════"
-    echo -e "${grn}Panel URL:${noc}     https://$dom_name:$port/$route"
-    echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
-    echo -e "${grn}Password:${noc}      $PASSWORD"
-    echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
-    banner "═══════════════════════════════════════════════════════════"
 
     return 0
 }
@@ -671,9 +663,9 @@ caddy_install() {
     else
         info "Installing Caddy..."
         log_info "Installing Caddy..."
-        sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl >> "$LOG_FILE" 2>&1
+        sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl 2>&1 | tee -a "$LOG_FILE" >/dev/null
 
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' 2>> "$LOG_FILE" | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>> "$LOG_FILE"
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' 2>> "$LOG_FILE" | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>> "$LOG_FILE"
 
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' 2>> "$LOG_FILE" | sudo tee /etc/apt/sources.list.d/caddy-stable.list 2>> "$LOG_FILE"
 
@@ -681,8 +673,8 @@ caddy_install() {
 
         sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list 2>/dev/null || true
 
-        sudo apt update >> "$LOG_FILE" 2>&1
-        sudo apt install -y caddy >> "$LOG_FILE" 2>&1
+        sudo apt-get update 2>&1 | tee -a "$LOG_FILE" >/dev/null
+        sudo apt-get install -y caddy 2>&1 | tee -a "$LOG_FILE" >/dev/null
 
         info "Deleting default Caddyfile..."
         log_info "Deleting default Caddyfile..."
@@ -751,6 +743,8 @@ caddy_install() {
         fi
     done
 
+    configure_caddy "$dom_name" "$ROUTE" "$ADMIN_NAME" "$HASH_PW" "$PORT" "$BE_PORT" "$REDIRECT_PORT"
+
     info "Installing Caddyfile..."
     log_info "Installing Caddyfile..."
     if [ -f "$CADDYFILE" ]; then
@@ -758,12 +752,13 @@ caddy_install() {
         log_info "Existing Caddyfile found at $CADDYFILE"
 
         if sudo grep -qE "^$dom_name(:|[[:space:]]|\{|$)" "$CADDYFILE"; then
-            warn "Domain $dom_name already exists in Cadyfile."
-            log_warn "Domain $dom_name already exists in Cadyfile."
+            warn "Domain $dom_name already exists in Caddyfile."
+            log_warn "Domain $dom_name already exists in Caddyfile."
             echo ""
             read -p "Overwrite existing configuration for $dom_name? [y/N]: " OVERWRITE
             if [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
-                local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
+                local backup_file
+                backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
                 sudo cp "$CADDYFILE" "$backup_file"
 
                 info "Removing old configuration for $dom_name..."
@@ -791,7 +786,7 @@ caddy_install() {
                     }
 
                     !skip { print }
-                ' "$CADDYFILE" >> /tmp/Caddyfile.tmp
+                ' "$CADDYFILE" | sudo tee /tmp/Caddyfile.tmp >/dev/null
 
                 if [ -s /tmp/Caddyfile.tmp ]; then
                     sudo mv /tmp/Caddyfile.tmp "$CADDYFILE"
@@ -818,7 +813,8 @@ caddy_install() {
         else
             info "Domain not found in existing Caddyfile, appending..."
             log_info "Domain not found in existing Caddyfile, appending..."
-            local backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
+            local backup_file
+            backup_file="/etc/caddy/Caddyfile.backup.$(date +%s)"
             sudo cp "$CADDYFILE" "$backup_file"
             success "Backup created: $backup_file"
             log_success "Backup created: $backup_file"
@@ -857,7 +853,8 @@ caddy_install() {
         echo ""
 
         if ls /etc/caddy/Caddyfile.backup.* 1>/dev/null 2>&1; then
-            local latest_backup=$(ls -t /etc/caddy/Caddyfile.backup.* | head -1)
+            local latest_backup
+            latest_backup=$(ls -t /etc/caddy/Caddyfile.backup.* | head -1)
             echo ""
             local restore_backup
             read -p "Restore from backup? [Y/n]: " restore_backup
@@ -942,19 +939,18 @@ caddy_install() {
                 banner "═══════════════════════════════════════════════════════════"
             fi
         else
-            if open_browser "$BE_PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD" "$dom_name"; then
-                sudo systemctl restart caddy
-                echo ""
-                banner "═══════════════════════════════════════════════════════════"
-                banner "    ✓ 3X-UI Panel Configured Automatically!"
-                banner "═══════════════════════════════════════════════════════════"
-                echo -e "${grn}Panel URL:${noc}     https://$dom_name:$REDIRECT_PORT/$ROUTE"
-            fi
-                echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
-                echo -e "${grn}Password:${noc}      $PASSWORD"
-                echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
-                banner "═══════════════════════════════════════════════════════════"
-
+            open_browser "$BE_PORT" "$ROUTE" "$ADMIN_NAME" "$PASSWORD" "$dom_name"
+            sudo systemctl restart caddy
+            echo ""
+            banner "═══════════════════════════════════════════════════════════"
+            banner "                  3X-UI Panel Access Information"
+            banner "═══════════════════════════════════════════════════════════"
+            echo -e "${grn}Panel URL:${noc}     https://$dom_name:$REDIRECT_PORT/$ROUTE"
+            echo -e "${grn}Admin User:${noc}    $ADMIN_NAME"
+            echo -e "${grn}Password:${noc}      $PASSWORD"
+            echo -e "${grn}API Endpoint:${noc}  https://$dom_name/api/v1"
+            banner "═══════════════════════════════════════════════════════════"
+        fi
     else
         error "Caddy failed to start!"
         log_error "Caddy failed to start!"
@@ -1007,7 +1003,7 @@ main() {
         log_success "Created installation directory: $INSTALL_DIR"
     fi
 
-    cd "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || exit 1
 
     echo ""
     echo -ne "${blu}Do you have a domain name? [Y/n]: ${noc}"
