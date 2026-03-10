@@ -22,18 +22,11 @@
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/install.sh)
 ```
 
-### Modular Installation (Recommended)
+### Modular Installation
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/modular/install.sh)
 ```
-
-### With Logging (for troubleshooting)
-
-```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/custom_logs.sh)
-```
-
 > ⚠️ Requires `sudo` privileges and Ubuntu/Debian system
 
 ---
