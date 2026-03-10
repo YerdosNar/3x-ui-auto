@@ -961,6 +961,19 @@ caddy_install() {
     return 0
 }
 
+activate_bbr() {
+    echo -e "Activate BBR [Y/n]: "
+    local bbr
+    read bbr
+    bbr=${bbr:-Y}
+    if [[ "$bbr" =~ ^[Nn]$ ]]; then
+        echo -e "${yel}Skipping...${noc}"
+        return 0
+    fi
+
+    return 0
+}
+
 main() {
     clear
     log_init
@@ -1132,6 +1145,8 @@ main() {
     fi
 
     echo ""
+
+    activate_bbr
 
     info "Useful commands:"
     log_info "Useful commands:"
