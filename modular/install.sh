@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# set -euo pipefail
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 3X-UI Automated Installer - Main Entry Point
