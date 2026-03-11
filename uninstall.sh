@@ -493,8 +493,7 @@ remove_caddy_config() {
     fi
 
     if ! grep -E "^$dom_name( |\{)" "$caddyfile" >/dev/null 2>&1; then
-        info "Configuration for ${BLUE}$dom_name${NC} not found in Caddyfile"
-        echo "[WARNING] Configuration for ${BLUE}$dom_name${NC} not found in Caddyfile"
+        warn "Configuration for ${BLUE}$dom_name${NC} not found in Caddyfile"
         return 0
     fi
 
