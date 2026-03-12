@@ -104,7 +104,7 @@ apply_network_optimizations() {
 
     if sudo grep -q "# 3X-UI Network Optimization" "$sysctl_conf" 2>/dev/null; then
         warn "Network optimizations already present in $sysctl_conf"
-        echo "Reapply optimizations (NOT recomended) [y/N]: "
+        echo -n "Reapply optimizations (NOT recomended) [y/N]: "
         local reapply
         read reapply
         reapply=${reapply:-N}
@@ -278,7 +278,7 @@ main() {
         warn "BBR requires kernel 4.9 or higher"
 
         local try_load
-        echo "Try to load kernel module (BBR) [Y/n]: "
+        echo -n "Try to load kernel module (BBR) [Y/n]: "
         read try_load
         try_load=${try_load:-Y}
         if [[ "$try_load" =~ ^[Yy]$ ]]; then
