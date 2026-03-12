@@ -91,7 +91,7 @@ check_current_settings() {
 }
 
 # Applying network optimizations
-apply_network_optimization() {
+apply_network_optimizations() {
     info "Applying network optimizations to /etc/sysctl.conf"
 
     local sysctl_conf="/etc/sysctl.conf"
@@ -166,7 +166,7 @@ load_sysctl_settings() {
     fi
 }
 
-verify_optimization() {
+verify_optimizations() {
     info "Verifying network optimizations"
 
     echo -e "${grn}Applied Configuration:${noc}"
