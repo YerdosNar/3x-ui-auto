@@ -58,6 +58,15 @@ banner()    { out_banner "$1"   && log_banner "$1"  ;   }
 
 readonly LOG_FILE="/tmp/.3xui_log"
 
+check_bbr_available() {
+    if sysctl net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -q bbr; then
+        success "BBR is Available"
+        return 0
+    fi
+
+    return 1
+}
+
 check_current_settings() {
     info "Checking current network settings..."
     echo ""
@@ -267,6 +276,20 @@ main() {
         warn "BBR congestion control may not be available on this kernel"
         warn "Kernel version $(uname -r)"
         warn "BBR requires kernel 4.9 or higher"
+
+        local try_load
+        echo "Try to load kernel module (BBR) [Y/n]: "
+        read try_load
+        try_load=${try_load:-Y}
+        if [[ "$try_load" =~ ^[Yy]$ ]]; then
+            info "Trying '${cyn}sudo modprobe tcp_bbr${noc}'"
+            sudo modprobe tcp_bbr
+        fi
+
+        if ! check_bbr_available; then
+            warn "Attempt to load BBR module was not successful"
+        fi
+
         echo ""
         local continue_no_bbr
         read -p "Continue anyway? [y/N]: " continue_no_bbr
