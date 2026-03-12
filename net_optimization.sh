@@ -75,7 +75,7 @@ check_current_settings() {
 
     local qdisc
     qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo "not set")
-    info "  Queue Discipline: $qdisc"
+    info "  Queue Discipline:       $qdisc"
 
     local congestion
     congestion=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "not set")
@@ -83,11 +83,11 @@ check_current_settings() {
 
     local fastopen
     fastopen=$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null || echo "not set")
-    info "  TCP Fast Open: $fastopen"
+    info "  TCP Fast Open:          $fastopen"
 
     local ip_forward
     ip_forward=$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo "not set")
-    info "  IPv4 Forwarding: $ip_forward"
+    info "  IPv4 Forwarding:        $ip_forward"
 }
 
 # Applying network optimizations
@@ -174,7 +174,7 @@ verify_optimizations() {
     local qdisc
     qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null)
     if [ "$qdisc" == "fq" ]; then
-        success "  ✓ Queue Discipline: $qdisc"
+        success "  ✓ Queue Discipline:       $qdisc"
     else
         warn "  ✗ Queue Discipline: $qdisc (expected: fq)"
     fi
@@ -190,9 +190,9 @@ verify_optimizations() {
     local fastopen
     fastopen=$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null)
     if [ "$fastopen" == "3" ]; then
-        success "  ✓ TCP Fast Open: $fastopen"
+        success "  ✓ TCP Fast Open:          $fastopen"
     else
-        warn "  ! TCP Fast Open: $fastopen (expected: 3)"
+        warn "  ! TCP Fast Open:         $fastopen (expected: 3)"
     fi
 
     local ip_forward
