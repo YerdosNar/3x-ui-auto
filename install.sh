@@ -62,6 +62,28 @@ readonly INSTALL_DIR="$HOME/3x-ui"
 readonly CADDYFILE="/etc/caddy/Caddyfile"
 readonly CONTAINER_NAME="3xui_app"
 
+# Not to overwrite existing files
+rename_file() {
+    local file="$1"
+    local f_name="${file%.*}"
+    local f_ext="${file##*.}"
+
+    local count=1
+    local new_f="$file"
+
+    while [ -e "$new_f" ]; do
+        new_f="${f_name}($count).$f_ext"
+        ((count++))
+    done
+
+    echo "$new_f"
+}
+
+file_init() {
+    INSTALL_DIR=$(rename_file "$INSTALL_DIR")
+    CONTAINER_NAME=$(rename_file "$CONTAINER_NAME")
+}
+
 # Initialize log file
 log_init() {
     echo "====================================" >  "$LOG_FILE"
@@ -853,6 +875,7 @@ caddy_install() {
 
 main() {
     clear
+    file_init
     log_init
     banner "═══════════════════════════════════════════════════════════"
     banner "            3X-UI Automated Installer v2.2"
