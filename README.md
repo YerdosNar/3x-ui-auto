@@ -15,19 +15,20 @@
 ---
 
 ## 🚀 Quick Start
+> ⚠️ Requires `sudo` privileges and Ubuntu/Debian system
 
 ### One-Liner Installation
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/install.sh)
 ```
+> Doesn't configure Firewall and Network Optimizations
 
 ### Modular Installation
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/modular/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/run_modular.sh)
 ```
-> ⚠️ Requires `sudo` privileges and Ubuntu/Debian system
 
 ---
 
@@ -125,6 +126,10 @@ sysctl net.core.default_qdisc           # Check queue
 ---
 
 ## 🗑️ Uninstallation
+```bash
+# To get a help message
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/uninstall.sh) -h
+```
 
 ### Remove Single Installation
 ```bash
@@ -152,28 +157,6 @@ bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/un
 - 📝 [Project Structure](modular/md_files/PROJECT_STRUCTURE.md) - Code organization
 - ⚙️ [Setup Guide](modular/md_files/SETUP.md) - Detailed installation steps
 - 🚀 [VPS Optimization Notes](modular/md_files/VPS_Speed_Security_Optimization_Notes.md) - Performance tuning
-
----
-
-## 🗂️ Directory Structure
-
-```
-3x-ui-auto/
-├── one_liner.sh           # Standalone installer
-├── custom_logs.sh         # Installer with logging
-├── uninstall.sh          # Uninstaller with smart detection
-├── modular/              # Modular installer
-│   ├── install.sh        # Main entry point
-│   ├── functions/        # Function modules
-│   │   ├── logger.sh
-│   │   ├── docker.sh
-│   │   ├── caddy.sh
-│   │   ├── firewall.sh           # Smart UFW management
-│   │   ├── network_optimization.sh  # BBR + TCP tuning
-│   │   └── ...
-│   └── md_files/         # Documentation
-└── README.md             # This file
-```
 
 ---
 
