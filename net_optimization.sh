@@ -92,14 +92,14 @@ check_current_settings() {
 
 # Applying network optimizations
 apply_network_optimizations() {
-    info "Applying network optimizations to /etc/sysctl.conf"
+    info "Applying network optimizations to /etc/sysctl.d/99-net-optimization-custom.conf"
 
-    local sysctl_conf="/etc/sysctl.conf"
+    local sysctl_conf="/etc/sysctl.d/99-net-optimization-custom.conf"
 
     # backup working file
     if [ -f "$sysctl_conf" ]; then
         sudo cp $sysctl_conf /etc/sysctl.conf.backup
-        info "Backed up to /etc/sysctl.conf.backup file"
+        info "Backed up to /etc/sysctl.d/99-net-optimization-custom.conf.backup file"
     fi
 
     if sudo grep -q "# 3X-UI Network Optimization" "$sysctl_conf" 2>/dev/null; then
@@ -159,7 +159,7 @@ EOF
 load_sysctl_settings() {
     info "Loading sysctl settings"
 
-    if sudo sysctl -p >> "$LOG_FILE" 2>&1; then
+    if sudo sysctl --system >> "$LOG_FILE" 2>&1; then
         success "sysctl settings loaded successfully!"
     else
         warn "Some sysctl settings may have failed to load"
