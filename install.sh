@@ -50,7 +50,7 @@ log_error()     { echo "[ ERROR ] $1" >> "$LOG_FILE" 2>&1;  }
 log_banner()    { echo "[BANNER ] $1" >> "$LOG_FILE";       }
 
 readonly STATE_FILE="/tmp/.3xui_state"
-readonly LOG_FILE="/tmp/.3xui_log_$$"
+readonly LOG_FILE="/tmp/.3xui_log"
 readonly INSTALL_DIR="$HOME/3x-ui"
 readonly CADDYFILE="/etc/caddy/Caddyfile"
 readonly CONTAINER_NAME="3xui_app"
@@ -961,66 +961,23 @@ caddy_install() {
     return 0
 }
 
-check_current_network_setting() {
-    info "Checking current network settings..."
-    log_info "Checking current network settings..."
-
-    echo ""
-
-    echo -e "${cyn}Current Configuration:${noc}"
-    local qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo "not set")
-    echo "  Queue Discipline: $qdisc"
-    log_info "  Queue Discipline: $qdisc"
-
-    local congestion=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "not set")
-    echo "  TCP Congestion Control: $congestion"
-    log_info "  TCP Congestion Control: $congestion"
-
-    local fastopen=$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null || echo "not set")
-    echo "  TCP Fast Open: $fastopen"
-    log_info "  TCP Fast Open: $fastopen"
-
-    local ip_forward=$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo "not set")
-    echo "  IPv4 Forwarding: $ip_forward"
-    log_info "  IPv4 Forwarding: $ip_forward"
-
-    echo ""
-}
-
 activate_bbr() {
+    sudo modprobe tcp_bbr
     if ! sysctl net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -q bbr; then
-        warn "BBR TCP Congestion Control Algorithm UNAVAILABLE"
-        log_warn "BBR TCP Congestion Control Algorithm UNAVAILABLE"
         return 0
     fi
 
-    # prints out current settings
-    check_current_network_setting
-
-    echo -e "Activate BBR [Y/n]: "
-    local bbr_tcp_cc
-    read bbr_tcp_cc
-    bbr_tcp_cc=${bbr_tcp_cc:-Y}
-    if [[ "$bbr_tcp_cc" =~ ^[Nn]$ ]]; then
-        echo -e "${yel}Skipping...${noc}"
+    echo "Activate BBR Congestion Control [Y/n]: "
+    local activate
+    read activate
+    activate=${activate:-Y}
+    if [[ "$activate" =~ ^[Nn]$ ]]; then
+        info "Skipping activation of BBR TCP Congestion Control"
+        log_info "Skipping activation of BBR TCP Congestion Control"
         return 0
     fi
 
-    info "Applying network optimizations to /etc/sysctl.conf"
-    log_info "Applying network optimizations to /etc/sysctl.conf"
-
-    local sysctl_conf="/etc/sysctl.conf"
-
-    # First backup the working file
-    if [ -f "$sysctl_conf" ]; then
-        sudo cp "$sysctl_conf" /etc/sysctl.conf.backup
-        info "Backup created: /etc/sysctl.conf.backup"
-        log_info "Backup created: /etc/sysctl.conf.backup"
-    fi
-
-    cat > bbr_activate.conf << EOF
-tcp_congestion_control = bbr
-EOF
+    bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/net_optimization.sh)
 
     return 0
 }
