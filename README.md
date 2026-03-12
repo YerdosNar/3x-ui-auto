@@ -42,6 +42,10 @@ bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/ru
 ### Optional Enhancements
 4. **UFW Firewall** - Smart port management and security
 5. **Network Optimization** - BBR congestion control and TCP tuning
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/net_optimization.sh)
+```
+>This script is also offered to run inside 'install.sh' script.
 
 ---
 
