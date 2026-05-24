@@ -10,7 +10,6 @@
 - ⚡ **Network Optimization** - BBR congestion control for 20-30x faster speeds
 - 🎯 **Smart Port Detection** - Never locks you out of SSH
 - 🔧 **Automatic Configuration** - 3X-UI panel ready to use
-- 📊 **Multiple Installations** - Support for multiple 3X-UI instances
 
 ---
 
@@ -22,7 +21,7 @@
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/YerdosNar/3x-ui-auto/master/install.sh)
 ```
-> Doesn't configure Firewall and Network Optimizations
+> Configures Network Optimizations (/etc/sysctl.d/10-net-optimizations.conf)
 
 ### Modular Installation
 
